@@ -5,6 +5,11 @@ import Dashboard from './pages/Dashboard';
 import RoomBooking from './pages/RoomBooking';
 import CarBooking from './pages/CarBooking';
 import AdminApprovals from './pages/AdminApprovals';
+import BookingDetail from './pages/BookingDetail';
+import Notifications from './pages/Notifications';
+import Profile from './pages/Profile';
+import CreateRoomBooking from './pages/CreateRoomBooking';
+import CreateCarBooking from './pages/CreateCarBooking';
 
 function App() {
   const token = localStorage.getItem('accessToken');
@@ -29,7 +34,14 @@ function App() {
       <Route path="/" element={isAuthenticated ? <DashboardLayout /> : <Navigate to="/login" />}>
         <Route index element={<Dashboard />} />
         <Route path="rooms" element={<RoomBooking />} />
+        <Route path="rooms/create" element={<CreateRoomBooking />} />
         <Route path="cars" element={<CarBooking />} />
+        <Route path="cars/create" element={<CreateCarBooking />} />
+        <Route path="notifications" element={<Notifications />} />
+        <Route path="profile" element={<Profile />} />
+        
+        {/* Booking Details (Approvals / Logs) */}
+        <Route path="admin/approvals/:id" element={<BookingDetail />} />
         
         {/* Admin Routes */}
         <Route path="admin">

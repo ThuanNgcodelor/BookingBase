@@ -169,4 +169,15 @@ public class AuthService {
 
         return new AuthResponse(newAccessToken, newRefreshToken, userDto);
     }
+
+    public void logout(String refreshToken) {
+        try {
+            if (jwtUtils.validateJwtToken(refreshToken)) {
+                String email = jwtUtils.getEmailFromJwtToken(refreshToken);
+                redisTemplate.delete("refreshToken:" + email);
+            }
+        } catch (Exception e) {
+            // Ignored, just proceed to logout on frontend
+        }
+    }
 }

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { Modal } from '../components/ui/Modal';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Building2, Calendar, Car, Clock, Mail, Phone, MapPin, User, CheckCircle, XCircle } from 'lucide-react';
+import { Building2, Calendar, Car, Clock } from 'lucide-react';
 
 // Fake Data for Pending Approvals
 const pendingRequests = [
@@ -36,20 +36,7 @@ const pendingRequests = [
 ];
 
 export default function AdminApprovals() {
-  const [selectedReq, setSelectedReq] = useState(null);
-
-  const handleApprove = () => {
-    alert(`Đã DUYỆT yêu cầu ${selectedReq.id}`);
-    setSelectedReq(null);
-  };
-
-  const handleReject = () => {
-    const reason = prompt('Nhập lý do từ chối:');
-    if (reason !== null) {
-      alert(`Đã TỪ CHỐI yêu cầu ${selectedReq.id} với lý do: ${reason}`);
-      setSelectedReq(null);
-    }
-  };
+  const navigate = useNavigate();
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -58,7 +45,7 @@ export default function AdminApprovals() {
         <p className="text-gray-500 mt-1">Quản lý và xét duyệt các yêu cầu sử dụng tài nguyên đang chờ xử lý.</p>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -98,7 +85,7 @@ export default function AdminApprovals() {
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                  <Button size="sm" variant="secondary" onClick={() => setSelectedReq(req)}>
+                  <Button size="sm" variant="secondary" onClick={() => navigate(`/admin/approvals/${req.id}`)}>
                     Xem chi tiết
                   </Button>
                 </td>
@@ -116,59 +103,6 @@ export default function AdminApprovals() {
         </table>
       </div>
 
-      {/* Modal Chi tiết Yêu cầu và Thông tin Người đặt */}
-      <Modal
-        isOpen={!!selectedReq}
-        onClose={() => setSelectedReq(null)}
-        title={`Chi tiết yêu cầu ${selectedReq?.id}`}
-      >
-        {selectedReq && (
-          <div className="space-y-6">
-            
-            {/* User Profile Card */}
-            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 flex items-start gap-4">
-              <img src={selectedReq.booker.avatar} alt="" className="w-16 h-16 rounded-full border-2 border-white shadow-sm" />
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900">{selectedReq.booker.fullName}</h3>
-                <p className="text-sm text-blue-600 font-medium mb-2">{selectedReq.booker.department}</p>
-                <div className="grid grid-cols-1 gap-1 text-sm text-gray-600">
-                  <div className="flex items-center gap-2"><Mail className="w-3.5 h-3.5" /> {selectedReq.booker.email}</div>
-                  <div className="flex items-center gap-2"><Phone className="w-3.5 h-3.5" /> {selectedReq.booker.phone}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Request Details */}
-            <div>
-              <h4 className="text-sm font-semibold text-gray-900 uppercase tracking-wider mb-3">Thông tin đặt tài nguyên</h4>
-              <dl className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2 text-sm">
-                <div className="sm:col-span-1">
-                  <dt className="text-gray-500 font-medium">Tài nguyên</dt>
-                  <dd className="mt-1 text-gray-900 font-semibold">{selectedReq.resourceName}</dd>
-                </div>
-                <div className="sm:col-span-1">
-                  <dt className="text-gray-500 font-medium">Thời gian</dt>
-                  <dd className="mt-1 text-gray-900 font-semibold">{selectedReq.timeInfo}</dd>
-                </div>
-                <div className="sm:col-span-2">
-                  <dt className="text-gray-500 font-medium">Mục đích sử dụng</dt>
-                  <dd className="mt-1 text-gray-900 p-3 bg-gray-50 rounded-md border border-gray-100">{selectedReq.purpose}</dd>
-                </div>
-              </dl>
-            </div>
-
-            {/* Actions */}
-            <div className="pt-4 mt-6 flex justify-end gap-3 border-t border-gray-100">
-              <Button variant="danger" type="button" onClick={handleReject} className="flex items-center gap-1.5">
-                <XCircle className="w-4 h-4" /> Từ chối
-              </Button>
-              <Button type="button" onClick={handleApprove} className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 focus:ring-green-500 text-white">
-                <CheckCircle className="w-4 h-4" /> Duyệt yêu cầu
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
     </div>
   );
 }

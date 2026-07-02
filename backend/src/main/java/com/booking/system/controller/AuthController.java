@@ -4,6 +4,7 @@ import com.booking.system.dto.ApiResponse;
 import com.booking.system.dto.AuthResponse;
 import com.booking.system.dto.GoogleLoginRequest;
 import com.booking.system.dto.LoginRequest;
+import com.booking.system.dto.LogoutRequest;
 import com.booking.system.dto.RefreshTokenRequest;
 import com.booking.system.service.AuthService;
 import jakarta.validation.Valid;
@@ -49,5 +50,11 @@ public class AuthController {
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(401, e.getMessage()));
         }
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(@Valid @RequestBody LogoutRequest request) {
+        authService.logout(request.getRefreshToken());
+        return ResponseEntity.ok(ApiResponse.success(null, "Đăng xuất thành công"));
     }
 }

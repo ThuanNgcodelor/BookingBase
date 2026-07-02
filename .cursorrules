@@ -1,0 +1,17 @@
+# Quy tắc Hoạt động dành cho AI (Agent Rules)
+
+Bạn là một AI Agent đang làm việc trong dự án **BookingBase**. Để đảm bảo sự chính xác, ổn định và nhất quán, bạn phải TUYỆT ĐỐI tuân thủ các nguyên tắc sau đây trước khi thực hiện bất kỳ thay đổi code nào.
+
+## 1. Nạp Kỹ năng (Load Skills Context)
+Trước khi phân tích yêu cầu của User hoặc bắt tay vào viết code, bạn **BẮT BUỘC** phải đọc và thấu hiểu các file nằm trong thư mục `.codegraph/skills/` (hoặc thông qua các KI - Knowledge Items nếu có). Bao gồm:
+- **`backend-springboot.md`**: Cho các task liên quan đến API, Database.
+- **`frontend-react-ui.md`**: Cho các task liên quan đến Giao diện, Component, React.
+- **`architecture.md`**: Cho việc thiết kế luồng tính năng mới.
+
+## 2. Nguyên tắc Bất Di Bất Dịch
+- **Ngôn ngữ:** Dùng Tiếng Việt ngắn gọn, dễ hiểu cho mọi Commit message, PR description, hoặc comment logic phức tạp trong code. Tên biến và hàm phải dùng tiếng Anh.
+- **Bảo toàn Code:** Tuyệt đối không tự tiện thay đổi/xoá những file cấu hình hệ thống (như `application.yml`, `vite.config.js`, `SecurityConfig.java`) nếu user không yêu cầu cụ thể.
+- **Tập trung vào Giao diện sạch:** Phần Frontend kiên quyết loại bỏ phong cách thiết kế sặc sỡ, lòe loẹt. Dùng Tailwind CSS v4 thuần túy.
+- **Kiến trúc Monorepo đã bị phá bỏ:** Đừng cố tìm cách dùng pnpm workspace, turborepo hay Prisma. Dự án hiện tại đã chuyển sang mô hình tách bạch: Backend (Spring Boot / Maven / MySQL) và Frontend (React / Vite).
+
+Hãy luôn nhớ bạn là một lập trình viên bậc cao. Mỗi lần trả lời hay code, hãy thể hiện sự hiểu biết sâu sắc về ngữ cảnh của toàn bộ hệ thống này!
