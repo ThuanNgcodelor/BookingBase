@@ -5,12 +5,14 @@ import com.booking.system.entity.BookingCar;
 import com.booking.system.entity.Vehicle;
 import com.booking.system.entity.User;
 import com.booking.system.enums.BookingStatus;
+import com.booking.system.enums.NotificationPriority;
+import com.booking.system.event.NotificationEvent;
 import com.booking.system.repository.BookingCarRepository;
 import com.booking.system.repository.VehicleRepository;
 import com.booking.system.repository.UserRepository;
 import com.booking.system.enums.NotificationType;
-import com.booking.system.service.NotificationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +25,7 @@ public class BookingCarService {
     private final VehicleRepository vehicleRepository;
     private final UserRepository userRepository;
     private final BookingCarRepository bookingCarRepository;
-    private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public BookingCar createBooking(BookingCarRequest request) {
@@ -57,18 +59,43 @@ public class BookingCarService {
         BookingCar saved = bookingCarRepository.save(booking);
         
         // Thông báo cho người đặt
-        notificationService.createNotification(requester, null,
-            "Tạo yêu cầu đặt xe thành công", 
-            "Yêu cầu đặt xe từ '" + saved.getDeparture() + "' đi '" + saved.getDestination() + "' đã được gửi và đang chờ duyệt.", 
-            NotificationType.BOOKING_CREATED);
+        eventPublisher.publishEvent(new NotificationEvent(
+                requester.getId(),
+                null,
+                NotificationType.BOOKING_CREATED,
+                "Tạo yêu cầu đặt xe thành công",
+                "Yêu cầu đặt xe từ '" + saved.getDeparture() + "' đi '" + saved.getDestination() + "' đã được gửi và đang chờ duyệt.",
+                "/cars",
+                "BOOKING_CAR",
+                saved.getId(),
+                NotificationPriority.NORMAL,
+                null
+        ));
             
         // Thông báo cho Admin
         java.util.List<User> admins = userRepository.findByRole(com.booking.system.enums.RoleEnum.ADMIN);
         for (User admin : admins) {
-            notificationService.createNotification(admin, requester,
-                "Yêu cầu đặt xe mới (Cần duyệt)", 
-                requester.getFullName() + " vừa tạo một yêu cầu đặt xe từ '" + saved.getDeparture() + "' đi '" + saved.getDestination() + "'.", 
-                NotificationType.BOOKING_CREATED);
+            if (admin.getId().equals(requester.getId())) {
+                continue;
+            }
+            eventPublisher.publishEvent(new NotificationEvent(
+                    admin.getId(),
+                    requester.getId(),
+                    NotificationType.BOOKING_PENDING_APPROVAL,
+                    "Yêu cầu đặt xe mới (Cần duyệt)",
+                    requester.getFullName() + " vừa tạo một yêu cầu đặt xe từ '" + saved.getDeparture() + "' đi '" + saved.getDestination() + "'.",
+                    "/admin/approvals",
+                    "BOOKING_CAR",
+                    saved.getId(),
+                    NotificationPriority.HIGH,
+                    new NotificationEvent.EmailInstruction(
+                            NotificationEvent.EmailType.BOOKING_CREATED_TO_ADMIN,
+                            "xe",
+                            requester.getFullName(),
+                            saved.getDeparture() + " - " + saved.getDestination(),
+                            null
+                    )
+            ));
         }
             
         return saved;
@@ -98,10 +125,18 @@ public class BookingCarService {
 
         // Notify if the canceller is not the requester
         if (!canceller.getId().equals(booking.getRequester().getId())) {
-            notificationService.createNotification(booking.getRequester(), canceller,
-                "Lịch đặt xe đã bị hủy",
-                "Lịch đặt xe từ '" + booking.getDeparture() + "' đi '" + booking.getDestination() + "' đã bị hủy bởi admin. Lý do: " + request.getReason(),
-                NotificationType.BOOKING_REJECTED);
+            eventPublisher.publishEvent(new NotificationEvent(
+                    booking.getRequester().getId(),
+                    canceller.getId(),
+                    NotificationType.BOOKING_CANCELLED,
+                    "Lịch đặt xe đã bị hủy",
+                    "Lịch đặt xe từ '" + booking.getDeparture() + "' đi '" + booking.getDestination() + "' đã bị hủy. Lý do: " + request.getReason(),
+                    "/cars",
+                    "BOOKING_CAR",
+                    booking.getId(),
+                    NotificationPriority.HIGH,
+                    null
+            ));
         }
     }
 }

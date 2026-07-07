@@ -5,13 +5,15 @@ import com.booking.system.entity.BookingRoom;
 import com.booking.system.entity.Room;
 import com.booking.system.entity.User;
 import com.booking.system.enums.BookingStatus;
+import com.booking.system.enums.NotificationPriority;
 import com.booking.system.enums.RoomStatus;
+import com.booking.system.event.NotificationEvent;
 import com.booking.system.repository.BookingRoomRepository;
 import com.booking.system.repository.RoomRepository;
 import com.booking.system.repository.UserRepository;
 import com.booking.system.enums.NotificationType;
-import com.booking.system.service.NotificationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,7 +24,7 @@ public class BookingRoomService {
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
     private final BookingRoomRepository bookingRoomRepository;
-    private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Hàm đặt phòng có kiểm tra trùng lịch và khóa DB.
@@ -69,18 +71,43 @@ public class BookingRoomService {
         BookingRoom saved = bookingRoomRepository.save(booking);
         
         // Thông báo cho người đặt
-        notificationService.createNotification(requester, null,
-            "Tạo yêu cầu đặt phòng thành công", 
-            "Yêu cầu đặt phòng '" + saved.getTitle() + "' đã được gửi và đang chờ duyệt.", 
-            NotificationType.BOOKING_CREATED);
+        eventPublisher.publishEvent(new NotificationEvent(
+                requester.getId(),
+                null,
+                NotificationType.BOOKING_CREATED,
+                "Tạo yêu cầu đặt phòng thành công",
+                "Yêu cầu đặt phòng '" + saved.getTitle() + "' đã được gửi và đang chờ duyệt.",
+                "/rooms",
+                "BOOKING_ROOM",
+                saved.getId(),
+                NotificationPriority.NORMAL,
+                null
+        ));
             
         // Thông báo cho Admin
         java.util.List<User> admins = userRepository.findByRole(com.booking.system.enums.RoleEnum.ADMIN);
         for (User admin : admins) {
-            notificationService.createNotification(admin, requester,
-                "Yêu cầu đặt phòng mới (Cần duyệt)", 
-                requester.getFullName() + " vừa tạo một yêu cầu đặt phòng mới ('" + saved.getTitle() + "').", 
-                NotificationType.BOOKING_CREATED);
+            if (admin.getId().equals(requester.getId())) {
+                continue;
+            }
+            eventPublisher.publishEvent(new NotificationEvent(
+                    admin.getId(),
+                    requester.getId(),
+                    NotificationType.BOOKING_PENDING_APPROVAL,
+                    "Yêu cầu đặt phòng mới (Cần duyệt)",
+                    requester.getFullName() + " vừa tạo một yêu cầu đặt phòng mới ('" + saved.getTitle() + "').",
+                    "/admin/approvals",
+                    "BOOKING_ROOM",
+                    saved.getId(),
+                    NotificationPriority.HIGH,
+                    new NotificationEvent.EmailInstruction(
+                            NotificationEvent.EmailType.BOOKING_CREATED_TO_ADMIN,
+                            "phòng",
+                            requester.getFullName(),
+                            saved.getTitle(),
+                            null
+                    )
+            ));
         }
             
         return saved;
@@ -110,10 +137,18 @@ public class BookingRoomService {
 
         // Notify if the canceller is not the requester (e.g. Admin cancelled it)
         if (!canceller.getId().equals(booking.getRequester().getId())) {
-            notificationService.createNotification(booking.getRequester(), canceller,
-                "Lịch đặt phòng đã bị hủy",
-                "Lịch đặt phòng '" + booking.getTitle() + "' đã bị hủy bởi admin. Lý do: " + request.getReason(),
-                NotificationType.BOOKING_REJECTED); // Or create a new BOOKING_CANCELLED type
+            eventPublisher.publishEvent(new NotificationEvent(
+                    booking.getRequester().getId(),
+                    canceller.getId(),
+                    NotificationType.BOOKING_CANCELLED,
+                    "Lịch đặt phòng đã bị hủy",
+                    "Lịch đặt phòng '" + booking.getTitle() + "' đã bị hủy. Lý do: " + request.getReason(),
+                    "/rooms",
+                    "BOOKING_ROOM",
+                    booking.getId(),
+                    NotificationPriority.HIGH,
+                    null
+            ));
         }
     }
 }

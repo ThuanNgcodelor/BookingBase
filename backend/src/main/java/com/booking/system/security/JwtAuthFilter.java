@@ -1,5 +1,7 @@
 package com.booking.system.security;
 
+import com.booking.system.entity.User;
+import com.booking.system.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,6 +23,7 @@ import java.util.Collections;
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtUtils jwtUtils;
+    private final UserRepository userRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -30,11 +33,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             String jwt = parseJwt(request);
             if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
                 String email = jwtUtils.getEmailFromJwtToken(jwt);
+                User user = userRepository.findByEmail(email)
+                        .orElseThrow(() -> new RuntimeException("User not found"));
 
-                // Tạo đối tượng Authentication
-                // Trong thực tế, bạn có thể load UserDetails từ database dựa trên email
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                        email, null, Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER")));
+                        user, null, Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + user.getRole().name())));
                 
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 

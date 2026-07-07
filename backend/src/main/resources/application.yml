@@ -25,8 +25,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: ${MAIL_USERNAME:nguyentrungthuan4177@gmail.com}
-    password: ${MAIL_PASSWORD:ywwu qbni qcah pftb}
+    username: ${MAIL_USERNAME:cfcbooking2026@gmail.com}
+    password: ${MAIL_PASSWORD:umog doyp uqwr nelz}
     properties:
       mail:
         smtp:
@@ -46,7 +46,7 @@ server:
 
 app:
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,https://cfcbooking.io.vn}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,https://cfcbooking.io.vn,http://localhost:4173}
 
 
 jwt:

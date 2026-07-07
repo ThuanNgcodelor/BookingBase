@@ -10,18 +10,26 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface NotificationRepository extends JpaRepository<Notification, String> {
-    Page<Notification> findByUserIdOrderByCreatedAtDesc(String userId, Pageable pageable);
+    Page<Notification> findByRecipientIdOrderByCreatedAtDesc(String recipientId, Pageable pageable);
 
-    // Giữ lại hàm cũ phòng trường hợp cần dùng
-    List<Notification> findByUserIdOrderByCreatedAtDesc(String userId);
+    Page<Notification> findByRecipientIdAndIsReadFalseOrderByCreatedAtDesc(String recipientId, Pageable pageable);
 
-    // Đếm tổng số thông báo chưa đọc của user
-    long countByUserIdAndIsReadFalse(String userId);
+    List<Notification> findByRecipientIdOrderByCreatedAtDesc(String recipientId);
 
-    // Lấy các thông báo chưa đọc mới hơn một thời điểm (dùng cho polling)
-    @Query("SELECT n FROM Notification n WHERE n.user.id = :userId AND n.isRead = false AND n.createdAt > :since ORDER BY n.createdAt DESC")
-    List<Notification> findUnreadSince(@Param("userId") String userId, @Param("since") LocalDateTime since);
+    long countByRecipientIdAndIsReadFalse(String recipientId);
+
+    Optional<Notification> findByIdAndRecipientId(String id, String recipientId);
+
+    boolean existsByRecipientIdAndTypeAndSourceTypeAndSourceId(String recipientId, com.booking.system.enums.NotificationType type, String sourceType, String sourceId);
+
+    @Query("SELECT n FROM Notification n WHERE n.recipient.id = :recipientId AND n.isRead = false AND n.createdAt > :since ORDER BY n.createdAt DESC")
+    List<Notification> findUnreadSince(@Param("recipientId") String recipientId, @Param("since") LocalDateTime since);
+
+    @Query("UPDATE Notification n SET n.isRead = true, n.readAt = :readAt WHERE n.recipient.id = :recipientId AND n.isRead = false")
+    @org.springframework.data.jpa.repository.Modifying
+    int markAllAsRead(@Param("recipientId") String recipientId, @Param("readAt") LocalDateTime readAt);
 }

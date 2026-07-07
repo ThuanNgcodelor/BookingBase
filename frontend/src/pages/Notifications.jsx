@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, CheckCircle2, Clock, XCircle, ArrowRight, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { notificationApi } from '../api/notificationApi';
 import { authApi } from '../api/authApi';
-import SockJS from 'sockjs-client';
-import { Stomp } from '@stomp/stompjs';
+import { useNotificationCenter } from '../contexts/useNotificationCenter';
 
 export default function Notifications() {
   const [notifications, setNotifications] = useState([]);
   const [totalElements, setTotalElements] = useState(0);
   const navigate = useNavigate();
   const user = authApi.getUser();
+  const { notifications: realtimeNotifications, loading, error, loadNotifications, markAsRead, markAllAsRead } = useNotificationCenter();
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -26,7 +25,7 @@ export default function Notifications() {
 
   useEffect(() => {
     if (user?.id) {
-      notificationApi.getNotifications(user.id, currentPage - 1, itemsPerPage)
+      loadNotifications(currentPage - 1, itemsPerPage)
         .then(data => {
             if (data && data.content) {
                 setNotifications(data.content);
@@ -38,27 +37,12 @@ export default function Notifications() {
         })
         .catch(err => console.error(err));
     }
-  }, [user?.id, currentPage]);
+  }, [user?.id, currentPage, loadNotifications]);
 
   useEffect(() => {
-    if (!user?.id) return;
-    const wsUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api/v1', '/ws') : 'http://localhost:8080/ws';
-    const socket = new SockJS(wsUrl);
-    const stompClient = Stomp.over(socket);
-    stompClient.debug = () => {};
-    stompClient.connect({}, () => {
-      stompClient.subscribe(`/topic/notifications/${user.id}`, (message) => {
-        const newNotif = JSON.parse(message.body);
-        setNotifications(prev => [newNotif, ...prev]);
-        setTotalElements(prev => prev + 1);
-      });
-    });
-    return () => {
-      if (stompClient.connected) {
-        stompClient.disconnect();
-      }
-    };
-  }, [user?.id]);
+    if (currentPage !== 1 || realtimeNotifications.length === 0) return;
+    setNotifications(realtimeNotifications.slice(0, itemsPerPage));
+  }, [currentPage, realtimeNotifications]);
 
   const getSystemIcon = (title) => {
     if (title.toLowerCase().includes('được duyệt')) return <CheckCircle2 className="w-5 h-5 text-green-500" />;
@@ -71,7 +55,7 @@ export default function Notifications() {
     // Mark as read
     if (!notif.isRead) {
       try {
-        await notificationApi.markAsRead(notif.id);
+        await markAsRead(notif);
         setNotifications(notifications.map(n => n.id === notif.id ? { ...n, isRead: true } : n));
       } catch (e) {
         console.error(e);
@@ -79,7 +63,9 @@ export default function Notifications() {
     }
 
     // Navigate based on type/title
-    if (user?.role === 'ADMIN' && (notif.title.toLowerCase().includes('mới') || notif.title.toLowerCase().includes('chờ duyệt'))) {
+    if (notif.targetUrl) {
+      navigate(notif.targetUrl);
+    } else if (user?.role === 'ADMIN' && (notif.title.toLowerCase().includes('mới') || notif.title.toLowerCase().includes('chờ duyệt'))) {
       navigate('/admin/approvals');
     } else if (notif.title.toLowerCase().includes('phòng')) {
       navigate('/rooms');
@@ -89,15 +75,12 @@ export default function Notifications() {
   };
 
   const handleMarkAllAsRead = async () => {
-    const unread = notifications.filter(n => !n.isRead);
-    for (const notif of unread) {
-      try {
-        await notificationApi.markAsRead(notif.id);
-      } catch (e) {
-        console.error(e);
-      }
+    try {
+      await markAllAsRead();
+      setNotifications(notifications.map(n => ({ ...n, isRead: true })));
+    } catch (e) {
+      console.error(e);
     }
-    setNotifications(notifications.map(n => ({ ...n, isRead: true })));
   };
 
   const filteredNotifications = notifications.filter(notif => {
@@ -172,7 +155,7 @@ export default function Notifications() {
                   </span>
                 </div>
                 <p className="text-sm text-gray-600 leading-relaxed mt-1">
-                  {notif.description}
+                  {notif.message || notif.description}
                 </p>
                 {hasSender && (
                   <p className="text-xs text-gray-400 mt-2">Từ: <span className="font-medium text-gray-500">{senderName}</span></p>
@@ -187,7 +170,13 @@ export default function Notifications() {
             </div>
           );
         })}
-        {displayNotifications.length === 0 && (
+        {loading && (
+          <div className="py-16 text-center text-sm text-gray-500">Đang tải thông báo...</div>
+        )}
+        {error && !loading && (
+          <div className="py-16 text-center text-sm text-red-500">{error}</div>
+        )}
+        {displayNotifications.length === 0 && !loading && !error && (
           <div className="py-20 flex flex-col items-center justify-center text-gray-500">
             <Bell className="w-12 h-12 text-gray-200 mb-4" />
             <p className="font-medium">

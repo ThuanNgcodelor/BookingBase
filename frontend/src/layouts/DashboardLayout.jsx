@@ -2,10 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { LogOut, Home, CalendarRange, CarFront, Bell, CheckSquare, Settings, Menu } from 'lucide-react';
 import { authApi } from '../api/authApi';
-import { notificationApi } from '../api/notificationApi';
-import Cookies from 'js-cookie';
+import { NotificationProvider } from '../contexts/NotificationContext';
+import { useNotificationCenter } from '../contexts/useNotificationCenter';
 
 export default function DashboardLayout() {
+  return (
+    <NotificationProvider>
+      <DashboardLayoutContent />
+    </NotificationProvider>
+  );
+}
+
+function DashboardLayoutContent() {
   const navigate = useNavigate();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
@@ -19,23 +27,7 @@ export default function DashboardLayout() {
   const isAdmin = user.role === 'ADMIN';
   const isApprover = user.role === 'ADMIN' || user.role === 'MANAGER';
 
-  const [notifications, setNotifications] = useState([]);
-
-  useEffect(() => {
-    if (user.id) {
-      notificationApi.getNotifications(user.id)
-        .then(data => {
-            if (data && data.content) {
-                setNotifications(data.content);
-            } else if (Array.isArray(data)) {
-                setNotifications(data);
-            } else {
-                setNotifications([]);
-            }
-        })
-        .catch(err => console.error("Lỗi lấy thông báo:", err));
-    }
-  }, [user.id]);
+  const { notifications, unreadCount, loading: notificationLoading, error: notificationError, markAsRead, markAllAsRead } = useNotificationCenter();
 
   // Tự động đóng sidebar trên mobile khi đổi trang
   useEffect(() => {
@@ -71,27 +63,30 @@ export default function DashboardLayout() {
     { name: 'Tài nguyên', path: '/admin/resources', icon: Settings, show: isAdmin },
   ];
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
-
   const handleMarkAsRead = async (notif) => {
-    if (!notif.isRead) {
-      try {
-        await notificationApi.markAsRead(notif.id);
-        setNotifications(notifications.map(n => n.id === notif.id ? { ...n, isRead: true } : n));
-      } catch (e) {
-        console.error(e);
-      }
+    try {
+      await markAsRead(notif);
+    } catch (e) {
+      console.error(e);
     }
 
-    if (user?.role === 'ADMIN' && (notif.title.toLowerCase().includes('mới') || notif.title.toLowerCase().includes('chờ duyệt'))) {
+    if (notif.targetUrl) {
+      navigate(notif.targetUrl);
+    } else if (user?.role === 'ADMIN' && (notif.title.toLowerCase().includes('mới') || notif.title.toLowerCase().includes('chờ duyệt'))) {
       navigate('/admin/approvals');
-      setIsNotifOpen(false);
     } else if (notif.title.toLowerCase().includes('phòng')) {
       navigate('/rooms');
-      setIsNotifOpen(false);
     } else if (notif.title.toLowerCase().includes('xe')) {
       navigate('/cars');
-      setIsNotifOpen(false);
+    }
+    setIsNotifOpen(false);
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      await markAllAsRead();
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -217,9 +212,15 @@ export default function DashboardLayout() {
                     <div className="absolute bottom-full left-0 mb-2 w-80 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-50">
                       <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                         <span className="font-semibold text-gray-900">Thông báo</span>
-                        <button className="text-xs text-blue-600 font-medium">Đã đọc tất cả</button>
+                        <button onClick={handleMarkAllAsRead} className="text-xs text-blue-600 font-medium">Đã đọc tất cả</button>
                       </div>
                       <div className="max-h-[300px] overflow-y-auto">
+                        {notificationLoading && (
+                          <div className="p-4 text-center text-sm text-gray-500">Đang tải thông báo...</div>
+                        )}
+                        {notificationError && !notificationLoading && (
+                          <div className="p-4 text-center text-sm text-red-500">{notificationError}</div>
+                        )}
                         {notifications.slice(0, 5).map(notif => {
                           const hasSender = !!notif.sender;
                           const senderName = notif.sender?.fullName || 'Hệ thống';
@@ -252,13 +253,13 @@ export default function DashboardLayout() {
                                     <span className={`text-sm font-medium truncate ${notif.isRead ? 'text-gray-700' : 'text-gray-900'}`}>{notif.title}</span>
                                     <span className="text-[10px] text-gray-400 whitespace-nowrap ml-2">{new Date(notif.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
                                   </div>
-                                  <p className="text-[13px] text-gray-500 leading-relaxed line-clamp-2">{notif.description}</p>
+                                  <p className="text-[13px] text-gray-500 leading-relaxed line-clamp-2">{notif.message || notif.description}</p>
                                 </div>
                               </div>
                             </div>
                           );
                         })}
-                        {notifications.length === 0 && (
+                        {notifications.length === 0 && !notificationLoading && !notificationError && (
                           <div className="p-4 text-center text-sm text-gray-500">Bạn không có thông báo nào</div>
                         )}
                       </div>
@@ -324,9 +325,15 @@ export default function DashboardLayout() {
                   <div className="absolute bottom-full left-12 mb-2 w-80 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-50">
                     <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                       <span className="font-semibold text-gray-900">Thông báo</span>
-                      <button className="text-xs text-blue-600 font-medium">Đã đọc tất cả</button>
+                      <button onClick={handleMarkAllAsRead} className="text-xs text-blue-600 font-medium">Đã đọc tất cả</button>
                     </div>
                     <div className="max-h-[300px] overflow-y-auto">
+                      {notificationLoading && (
+                        <div className="p-4 text-center text-sm text-gray-500">Đang tải thông báo...</div>
+                      )}
+                      {notificationError && !notificationLoading && (
+                        <div className="p-4 text-center text-sm text-red-500">{notificationError}</div>
+                      )}
                       {notifications.slice(0, 5).map(notif => (
                         <div
                           key={notif.id}
@@ -337,15 +344,21 @@ export default function DashboardLayout() {
                             <span className={`text-sm font-medium ${notif.isRead ? 'text-gray-700' : 'text-gray-900'}`}>{notif.title}</span>
                             <span className="text-xs text-gray-400">{new Date(notif.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
                           </div>
-                          <p className="text-sm text-gray-500">{notif.message}</p>
+                          <p className="text-sm text-gray-500">{notif.message || notif.description}</p>
                         </div>
                       ))}
-                      {notifications.length === 0 && (
+                      {notifications.length === 0 && !notificationLoading && !notificationError && (
                         <div className="p-4 text-center text-sm text-gray-500">Bạn không có thông báo nào</div>
                       )}
                     </div>
                     <div className="p-2 bg-gray-50/50 border-t border-gray-100">
-                      <button className="w-full py-1.5 text-sm text-blue-600 font-medium hover:bg-blue-50 rounded-md transition-colors">
+                      <button
+                        onClick={() => {
+                          setIsNotifOpen(false);
+                          navigate('/notifications');
+                        }}
+                        className="w-full py-1.5 text-sm text-blue-600 font-medium hover:bg-blue-50 rounded-md transition-colors"
+                      >
                         Xem tất cả
                       </button>
                     </div>
