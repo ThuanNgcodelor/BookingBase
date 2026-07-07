@@ -18,8 +18,8 @@ const CustomEvent = ({ event }) => {
     : `${format(event.start, 'HH:mm')} - ${format(event.end, 'HH:mm')}`;
 
   return (
-    <div className={`w-full h-full rounded ${bgClass} text-white shadow-sm hover:brightness-95 transition-all border border-black/5 relative`}>
-      <div className="sticky top-2 z-10 p-1.5 flex flex-col">
+    <div className={`w-full h-full rounded ${bgClass} text-white shadow-sm hover:brightness-95 transition-all border border-black/5 relative overflow-hidden`}>
+      <div className="p-1 sm:p-1.5 h-full flex flex-col">
         <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 mb-0.5 sm:mb-1">
           <div className="relative w-4 h-4 sm:w-5 sm:h-5 shrink-0">
             {event.avatarUrl ? (

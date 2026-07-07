@@ -10,6 +10,7 @@ import { resourceApi } from '../api/resourceApi';
 import { bookingApi } from '../api/bookingApi';
 import CustomToolbar from '../components/calendar/CustomToolbar';
 import CustomEvent from '../components/calendar/CustomEvent';
+import CustomMonthEvent from '../components/calendar/CustomMonthEvent';
 import CustomDateHeader from '../components/calendar/CustomDateHeader';
 import toast from 'react-hot-toast';
 
@@ -39,7 +40,7 @@ export default function RoomBooking() {
   const [rooms, setRooms] = useState([]);
   const [events, setEvents] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState('');
-  const [view, setView] = useState('week');
+  const [view, setView] = useState(window.innerWidth < 768 ? 'day' : 'week');
   const [date, setDate] = useState(new Date());
 
   useEffect(() => {
@@ -81,7 +82,7 @@ export default function RoomBooking() {
   return (
     <div className="w-full h-full flex flex-col bg-white">
       {/* Calendar Grid */}
-      <div className="flex-1 bg-white p-4 sm:px-6 overflow-hidden flex flex-col">
+      <div className="flex-1 bg-white p-4 sm:px-6 overflow-y-auto overflow-x-hidden flex flex-col">
         <CustomToolbar 
           date={date}
           view={view}
@@ -97,6 +98,7 @@ export default function RoomBooking() {
           .rbc-time-view, .rbc-month-view { border: none; }
           .rbc-time-header { border-bottom: 1px solid #f1f5f9; }
           .rbc-time-content { border-top: none; overflow-y: auto; }
+          .rbc-time-content > * { min-height: 1440px; } /* Ensures 24h scrollable grid */
           .rbc-time-slot { min-height: 24px; border-bottom: 1px solid #f8fafc; }
           .rbc-timeslot-group { border-bottom: 1px solid #f1f5f9; min-height: 48px; }
           .rbc-day-slot .rbc-time-slot { border-top: none; }
@@ -117,6 +119,13 @@ export default function RoomBooking() {
           .rbc-day-slot .rbc-events-container { margin-right: 0; }
           .rbc-time-header-content { border-left: 1px solid #f1f5f9; }
           .rbc-day-bg + .rbc-day-bg { border-left: 1px solid #f1f5f9; }
+          @media (max-width: 768px) {
+            .rbc-time-view { overflow-x: auto; }
+            .rbc-time-header, .rbc-time-content { min-width: 700px; }
+            .rbc-time-gutter { position: sticky; left: 0; background: white; z-index: 10; border-right: 1px solid #f1f5f9; }
+            .rbc-time-header > .rbc-label { position: sticky; left: 0; background: white; z-index: 10; }
+            .rbc-month-view { min-height: 600px; }
+          }
         `}</style>
 
         <Calendar
@@ -141,8 +150,6 @@ export default function RoomBooking() {
             navigate('/rooms/create', { state: { start: slotInfo.start, end: slotInfo.end } });
           }}
           onSelectEvent={(event) => navigate(`/admin/approvals/${event.id}`)}
-          min={new Date(0, 0, 0, 7, 0, 0)}
-          max={new Date(0, 0, 0, 20, 0, 0)}
           scrollToTime={new Date(1970, 1, 1, 7)}
           formats={{ 
             timeGutterFormat: "H'h'",
@@ -150,6 +157,9 @@ export default function RoomBooking() {
           toolbar={false}
           components={{
             event: CustomEvent,
+            month: {
+              event: CustomMonthEvent
+            },
             header: CustomDateHeader
           }}
           className="h-full font-sans text-sm"

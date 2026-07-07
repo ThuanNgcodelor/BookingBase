@@ -89,4 +89,31 @@ public class BookingRoomService {
     public java.util.List<BookingRoom> getAllBookings() {
         return bookingRoomRepository.findAll();
     }
+
+    @Transactional
+    public void cancelBooking(String bookingId, com.booking.system.dto.CancelRequest request) {
+        BookingRoom booking = bookingRoomRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy lịch đặt phòng"));
+        
+        if (booking.getStatus() == BookingStatus.CANCELLED) {
+            throw new RuntimeException("Lịch đặt phòng này đã bị hủy trước đó");
+        }
+
+        User canceller = userRepository.findById(request.getCancellerId())
+                .orElseThrow(() -> new RuntimeException("Người hủy không tồn tại"));
+
+        booking.setStatus(BookingStatus.CANCELLED);
+        booking.setCancelReason(request.getReason());
+        booking.setCancelledBy(canceller);
+        
+        bookingRoomRepository.save(booking);
+
+        // Notify if the canceller is not the requester (e.g. Admin cancelled it)
+        if (!canceller.getId().equals(booking.getRequester().getId())) {
+            notificationService.createNotification(booking.getRequester(), canceller,
+                "Lịch đặt phòng đã bị hủy",
+                "Lịch đặt phòng '" + booking.getTitle() + "' đã bị hủy bởi admin. Lý do: " + request.getReason(),
+                NotificationType.BOOKING_REJECTED); // Or create a new BOOKING_CANCELLED type
+        }
+    }
 }

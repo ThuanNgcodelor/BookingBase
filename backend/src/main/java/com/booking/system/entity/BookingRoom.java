@@ -41,4 +41,11 @@ public class BookingRoom {
 
     @Enumerated(EnumType.STRING)
     private BookingStatus status = BookingStatus.PENDING;
+
+    @Column(name = "cancel_reason", length = 1000)
+    private String cancelReason;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cancelled_by_id")
+    private User cancelledBy;
 }

@@ -77,4 +77,31 @@ public class BookingCarService {
     public List<BookingCar> getAllBookings() {
         return bookingCarRepository.findAll();
     }
+
+    @Transactional
+    public void cancelBooking(String bookingId, com.booking.system.dto.CancelRequest request) {
+        BookingCar booking = bookingCarRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy lịch đặt xe"));
+        
+        if (booking.getStatus() == BookingStatus.CANCELLED) {
+            throw new RuntimeException("Lịch đặt xe này đã bị hủy trước đó");
+        }
+
+        User canceller = userRepository.findById(request.getCancellerId())
+                .orElseThrow(() -> new RuntimeException("Người hủy không tồn tại"));
+
+        booking.setStatus(BookingStatus.CANCELLED);
+        booking.setCancelReason(request.getReason());
+        booking.setCancelledBy(canceller);
+        
+        bookingCarRepository.save(booking);
+
+        // Notify if the canceller is not the requester
+        if (!canceller.getId().equals(booking.getRequester().getId())) {
+            notificationService.createNotification(booking.getRequester(), canceller,
+                "Lịch đặt xe đã bị hủy",
+                "Lịch đặt xe từ '" + booking.getDeparture() + "' đi '" + booking.getDestination() + "' đã bị hủy bởi admin. Lý do: " + request.getReason(),
+                NotificationType.BOOKING_REJECTED);
+        }
+    }
 }

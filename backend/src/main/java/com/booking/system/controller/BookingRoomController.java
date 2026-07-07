@@ -35,4 +35,14 @@ public class BookingRoomController {
     public ResponseEntity<ApiResponse<java.util.List<BookingRoom>>> getAllBookings() {
         return ResponseEntity.ok(ApiResponse.success(bookingRoomService.getAllBookings(), "Lấy danh sách đặt phòng thành công"));
     }
+
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<ApiResponse<Void>> cancelBooking(@PathVariable String id, @Valid @RequestBody com.booking.system.dto.CancelRequest request) {
+        try {
+            bookingRoomService.cancelBooking(id, request);
+            return ResponseEntity.ok(ApiResponse.success(null, "Đã hủy lịch đặt phòng thành công"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(400, e.getMessage()));
+        }
+    }
 }
