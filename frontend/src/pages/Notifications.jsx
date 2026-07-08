@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { authApi } from '../api/authApi';
 import { useNotificationCenter } from '../contexts/useNotificationCenter';
 import PushNotificationSettings from '../components/PushNotificationSettings';
+import { formatViDateTime } from '../utils/dateTime';
 
 export default function Notifications() {
   const [notifications, setNotifications] = useState([]);
@@ -164,7 +165,7 @@ export default function Notifications() {
                     {notif.title}
                   </h3>
                   <span className="text-xs font-medium text-gray-400 whitespace-nowrap">
-                    {new Date(notif.createdAt).toLocaleString('vi-VN')}
+                    {formatViDateTime(notif.createdAt)}
                   </span>
                 </div>
                 <p className="text-sm text-gray-600 leading-relaxed mt-1">

@@ -3,15 +3,15 @@ import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { vi } from 'date-fns/locale/vi';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
-import { Button } from '../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
-import { Building2 } from 'lucide-react';
 import { resourceApi } from '../api/resourceApi';
 import { bookingApi } from '../api/bookingApi';
 import CustomToolbar from '../components/calendar/CustomToolbar';
 import CustomEvent from '../components/calendar/CustomEvent';
 import CustomMonthEvent from '../components/calendar/CustomMonthEvent';
 import CustomDateHeader from '../components/calendar/CustomDateHeader';
+import '../components/calendar/bookingCalendar.css';
+import { parseApiDateTime } from '../utils/dateTime';
 import toast from 'react-hot-toast';
 
 const locales = { 'vi': vi };
@@ -59,8 +59,8 @@ export default function RoomBooking() {
         const mappedEvents = (bookingsData || []).map(b => ({
           id: b.id,
           title: b.title,
-          start: new Date(b.startTime),
-          end: new Date(b.endTime),
+          start: parseApiDateTime(b.startTime),
+          end: parseApiDateTime(b.endTime),
           user: b.requester?.fullName || 'User',
           avatarUrl: b.requester?.avatarUrl,
           status: b.status,
@@ -94,39 +94,6 @@ export default function RoomBooking() {
           resourceType="room"
           onCreateClick={() => navigate('/rooms/create')}
         />
-        <style>{`
-          .rbc-time-view, .rbc-month-view { border: none; }
-          .rbc-time-header { border-bottom: 1px solid #f1f5f9; }
-          .rbc-time-content { border-top: none; overflow-y: auto; }
-          .rbc-time-content > * { min-height: 1440px; } /* Ensures 24h scrollable grid */
-          .rbc-time-slot { min-height: 24px; border-bottom: 1px solid #f8fafc; }
-          .rbc-timeslot-group { border-bottom: 1px solid #f1f5f9; min-height: 48px; }
-          .rbc-day-slot .rbc-time-slot { border-top: none; }
-          .rbc-event { 
-            background-color: transparent !important; 
-            padding: 0 4px 0 0 !important; 
-            border: none !important; 
-            border-radius: 4px !important;
-            box-shadow: none !important;
-          }
-          .rbc-event:focus { outline: none !important; }
-          .rbc-header { padding: 0; border-bottom: none; border-left: 1px solid #f1f5f9; }
-          .rbc-header + .rbc-header { border-left: 1px solid #f1f5f9; }
-          .rbc-today { background-color: #f8fafc; }
-          .rbc-time-gutter .rbc-timeslot-group { border-right: none; }
-          .rbc-label { font-size: 0.75rem; color: #64748b; padding: 0 8px; font-weight: 500; }
-          .rbc-allday-cell { display: none; } /* Ẩn phần all-day */
-          .rbc-day-slot .rbc-events-container { margin-right: 0; }
-          .rbc-time-header-content { border-left: 1px solid #f1f5f9; }
-          .rbc-day-bg + .rbc-day-bg { border-left: 1px solid #f1f5f9; }
-          @media (max-width: 768px) {
-            .rbc-time-view { overflow-x: auto; }
-            .rbc-time-header, .rbc-time-content { min-width: 700px; }
-            .rbc-time-gutter { position: sticky; left: 0; background: white; z-index: 10; border-right: 1px solid #f1f5f9; }
-            .rbc-time-header > .rbc-label { position: sticky; left: 0; background: white; z-index: 10; }
-            .rbc-month-view { min-height: 600px; }
-          }
-        `}</style>
 
         <Calendar
           localizer={localizer}
@@ -140,8 +107,14 @@ export default function RoomBooking() {
           onNavigate={setDate}
           step={30}
           timeslots={2}
+          min={new Date(1970, 0, 1, 0, 0)}
+          max={new Date(1970, 0, 1, 23, 59)}
           showMultiDayTimes={true}
           selectable
+          popup
+          showAllEvents={false}
+          allDayMaxRows={1}
+          dayLayoutAlgorithm="no-overlap"
           onSelectSlot={(slotInfo) => {
             if (slotInfo.start < new Date()) {
               toast.error("Không thể đặt lịch trong quá khứ!");
@@ -162,7 +135,7 @@ export default function RoomBooking() {
             },
             header: CustomDateHeader
           }}
-          className="h-full font-sans text-sm"
+          className="booking-calendar h-full font-sans text-sm"
         />
       </div>
     </div >

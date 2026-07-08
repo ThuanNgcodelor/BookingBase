@@ -2,23 +2,23 @@ import React from 'react';
 import { format } from 'date-fns';
 
 const CustomMonthEvent = ({ event }) => {
-  const isApproved = event.status === 'APPROVED';
   const isRejected = event.status === 'REJECTED';
   const isPending = event.status === 'PENDING';
-
-  let bgClass = "bg-[#7bb3e8]"; 
-  if (isPending) bgClass = "bg-[#f6b26b]"; 
-  if (isRejected) bgClass = "bg-[#e06666]";
+  const bgClass = isRejected ? 'bg-red-500' : isPending ? 'bg-amber-500' : 'bg-blue-600';
 
   const timeString = format(event.start, 'HH:mm');
+  const label = event.title || event.user;
 
   return (
-    <div className={`w-full rounded ${bgClass} text-white shadow-sm hover:brightness-95 transition-all border border-black/5 px-1 py-0.5 flex items-center gap-1 overflow-hidden h-5 sm:h-6`}>
-      <span className="text-[9px] sm:text-[10px] font-bold whitespace-nowrap">
+    <div
+      title={`${timeString} ${label}`}
+      className={`flex h-[18px] w-full items-center gap-1 overflow-hidden rounded ${bgClass} px-1 text-white shadow-sm transition-all hover:brightness-95 sm:h-5`}
+    >
+      <span className="shrink-0 text-[9px] font-bold leading-none sm:text-[10px]">
         {timeString}
       </span>
-      <span className="text-[9px] sm:text-[10px] font-semibold truncate">
-        {event.user}
+      <span className="min-w-0 truncate text-[9px] font-semibold leading-none sm:text-[10px]">
+        {label}
       </span>
     </div>
   );

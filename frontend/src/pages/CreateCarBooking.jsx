@@ -5,21 +5,16 @@ import { Button } from '../components/ui/Button';
 import { resourceApi } from '../api/resourceApi';
 import { bookingApi } from '../api/bookingApi';
 import { authApi } from '../api/authApi';
+import { parseApiDateTime, toApiLocalDateTime, toDateTimeLocalValue } from '../utils/dateTime';
 import toast from 'react-hot-toast';
 
 export default function CreateCarBooking() {
   const navigate = useNavigate();
   const location = useLocation();
   const preSelectedStart = location.state?.start ? new Date(location.state.start) : new Date();
-
-  const formatDateTime = (date) => {
-    const pad = (n) => (n < 10 ? '0' + n : n);
-    return date.getFullYear() + '-' +
-      pad(date.getMonth() + 1) + '-' +
-      pad(date.getDate()) + 'T' +
-      pad(date.getHours()) + ':' +
-      pad(date.getMinutes());
-  };
+  const preSelectedEnd = location.state?.end
+    ? new Date(location.state.end)
+    : new Date(preSelectedStart.getTime() + 60 * 60 * 1000);
 
   const [cars, setCars] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -30,8 +25,8 @@ export default function CreateCarBooking() {
     vehicleId: '',
     departure: '',
     destination: '',
-    startTime: formatDateTime(preSelectedStart),
-    endTime: formatDateTime(new Date(preSelectedStart.getTime() + 60 * 60 * 1000)), // default 1 hr later
+    startTime: toDateTimeLocalValue(preSelectedStart),
+    endTime: toDateTimeLocalValue(preSelectedEnd),
     note: ''
   });
 
@@ -61,14 +56,20 @@ export default function CreateCarBooking() {
     
     try {
       const user = authApi.getUser();
+      const startTime = toApiLocalDateTime(formData.startTime);
+      const endTime = toApiLocalDateTime(formData.endTime);
+      if (parseApiDateTime(startTime) >= parseApiDateTime(endTime)) {
+        throw new Error('Thời gian bắt đầu phải trước thời gian kết thúc.');
+      }
+
       const payload = {
         requesterId: user?.id,
         vehicleId: formData.vehicleId,
         title: formData.title,
         departure: formData.departure,
         destination: formData.destination,
-        startTime: new Date(formData.startTime).toISOString(),
-        endTime: new Date(formData.endTime).toISOString(),
+        startTime,
+        endTime,
         note: formData.note
       };
       
@@ -76,7 +77,7 @@ export default function CreateCarBooking() {
       toast.success('Đăng ký xe thành công!');
       navigate('/cars');
     } catch (err) {
-      setError(err.response?.data?.message || 'Có lỗi xảy ra. Vui lòng kiểm tra lại!');
+      setError(err.response?.data?.message || err.message || 'Có lỗi xảy ra. Vui lòng kiểm tra lại!');
     } finally {
       setLoading(false);
     }

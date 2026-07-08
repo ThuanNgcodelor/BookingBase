@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, DoorOpen, Car, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi } from '../api/dashboardApi';
+import { formatViDate, formatViTime } from '../utils/dateTime';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -19,6 +20,13 @@ export default function AdminDashboard() {
       .catch(err => console.error("Error loading admin stats:", err))
       .finally(() => setLoading(false));
   }, []);
+
+  const openActivityDetail = (activity) => {
+    if (!activity?.id) {
+      return;
+    }
+    navigate(`/admin/approvals/${activity.id}`);
+  };
 
   return (
     <div className="w-full flex-1">
@@ -85,7 +93,19 @@ export default function AdminDashboard() {
              <div className="py-8 text-center text-gray-400">Đang tải...</div>
           ) : stats.todayActivities?.length > 0 ? (
             stats.todayActivities.map((act) => (
-              <div key={act.id} className="p-4 rounded-lg border border-gray-100 bg-gray-50/50 flex items-center justify-between">
+              <div
+                key={act.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => openActivityDetail(act)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openActivityDetail(act);
+                  }
+                }}
+                className="group cursor-pointer p-4 rounded-lg border border-gray-100 bg-gray-50/50 flex items-center justify-between transition-colors hover:bg-blue-50/40 hover:border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+              >
                 <div className="flex items-center gap-3">
                   <div className={`p-2 rounded-md ${act.type === 'ROOM' ? 'bg-blue-100 text-blue-600' : 'bg-teal-100 text-teal-600'}`}>
                     {act.type === 'ROOM' ? <DoorOpen className="w-5 h-5" /> : <Car className="w-5 h-5" />}
@@ -93,14 +113,15 @@ export default function AdminDashboard() {
                   <div>
                     <h4 className="text-sm font-semibold text-gray-900">{act.title}</h4>
                     <p className="text-xs text-gray-500 mt-0.5">{act.subtitle} &bull; {act.requesterName}</p>
+                    <p className="mt-1 text-[11px] font-medium text-blue-600 opacity-0 transition-opacity group-hover:opacity-100">Xem chi tiết</p>
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-sm font-medium text-gray-700">
-                    {new Date(act.startTime).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})} - {new Date(act.endTime).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}
+                    {formatViTime(act.startTime)} - {formatViTime(act.endTime)}
                   </div>
                   <div className="text-xs text-gray-400 mt-0.5">
-                    {new Date(act.startTime).toLocaleDateString('vi-VN')}
+                    {formatViDate(act.startTime)}
                   </div>
                 </div>
               </div>

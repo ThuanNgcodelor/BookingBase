@@ -1,16 +1,12 @@
 import React from 'react';
 import { format } from 'date-fns';
-import { User } from 'lucide-react';
 
 const CustomEvent = ({ event }) => {
-  const isApproved = event.status === 'APPROVED';
   const isRejected = event.status === 'REJECTED';
   const isPending = event.status === 'PENDING';
-
-  // Base on Image 3
-  let bgClass = "bg-[#7bb3e8]"; 
-  if (isPending) bgClass = "bg-[#f6b26b]"; 
-  if (isRejected) bgClass = "bg-[#e06666]";
+  const bgClass = isRejected ? 'bg-[#ef4444]' : isPending ? 'bg-[#f59e0b]' : 'bg-[#2563eb]';
+  const durationMinutes = Math.max(0, Math.round((event.end - event.start) / 60000));
+  const isShortEvent = durationMinutes <= 45;
 
   const isMultiDay = event.start.toDateString() !== event.end.toDateString();
   const timeString = isMultiDay 
@@ -18,10 +14,10 @@ const CustomEvent = ({ event }) => {
     : `${format(event.start, 'HH:mm')} - ${format(event.end, 'HH:mm')}`;
 
   return (
-    <div className={`w-full h-full rounded ${bgClass} text-white shadow-sm hover:brightness-95 transition-all border border-black/5 relative overflow-hidden`}>
-      <div className="p-1 sm:p-1.5 h-full flex flex-col">
-        <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 mb-0.5 sm:mb-1">
-          <div className="relative w-4 h-4 sm:w-5 sm:h-5 shrink-0">
+    <div className={`h-full w-full overflow-hidden rounded-md border border-black/5 ${bgClass} text-white shadow-sm transition-all hover:brightness-95`}>
+      <div className={`flex h-full min-h-0 flex-col ${isShortEvent ? 'justify-center px-1.5 py-0.5' : 'p-1.5'}`}>
+        <div className="flex min-w-0 items-center gap-1">
+          <div className="relative h-4 w-4 shrink-0 sm:h-5 sm:w-5">
             {event.avatarUrl ? (
               <img src={event.avatarUrl} referrerPolicy="no-referrer" alt={event.user} className="w-full h-full rounded-full object-cover border border-white/30" />
             ) : (
@@ -31,19 +27,22 @@ const CustomEvent = ({ event }) => {
                 </span>
               </div>
             )}
-            <div className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full border border-[#7bb3e8] sm:border-2"></div>
+            <div className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full border border-white bg-emerald-300 sm:h-2 sm:w-2"></div>
           </div>
-          <div className="flex-1 min-w-[20px] flex items-center gap-0.5 sm:gap-1 mt-0 overflow-hidden">
-            <span className="text-[9px] sm:text-[11px] md:text-xs font-semibold truncate">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[10px] font-semibold leading-tight sm:text-xs">
               {event.user}
-            </span>
-            <User className="w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0 opacity-80" />
+            </div>
+            <div className="truncate text-[9px] font-medium leading-tight opacity-95 sm:text-[11px]">
+              {timeString}
+            </div>
           </div>
         </div>
-        <div className="text-[8.5px] sm:text-[10px] md:text-[11px] leading-snug opacity-95">
-          <div className="truncate">{event.title}</div>
-          <div className="truncate">({timeString})</div>
-        </div>
+        {!isShortEvent && (
+          <div className="mt-1 truncate text-[10px] leading-tight opacity-95 sm:text-[11px]">
+            {event.title}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import { Bell } from 'lucide-react';
 import { notificationApi } from '../api/notificationApi';
 import { NotificationContext } from './NotificationContextCore';
 import { syncAppBadge } from '../utils/appBadge';
+import { normalizeNotification, normalizeNotificationList } from '../utils/notification';
 
 const getWsUrl = () => {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
@@ -25,9 +26,13 @@ export function NotificationProvider({ children }) {
     setError('');
     try {
       const data = await notificationApi.getNotifications(page, size, unreadOnly);
-      setNotifications(data?.content || []);
+      const normalizedContent = normalizeNotificationList(data?.content || []);
+      setNotifications(normalizedContent);
       setUnreadCount(await notificationApi.getUnreadCount());
-      return data;
+      return {
+        ...data,
+        content: normalizedContent,
+      };
     } catch (err) {
       setError(err.response?.data?.message || 'Không thể tải thông báo');
       throw err;
@@ -45,11 +50,12 @@ export function NotificationProvider({ children }) {
   }, []);
 
   const upsertRealtimeNotification = useCallback((notification) => {
+    const normalized = normalizeNotification(notification);
     setNotifications((prev) => {
-      if (prev.some((item) => item.id === notification.id)) return prev;
-      return [notification, ...prev].slice(0, 20);
+      if (prev.some((item) => item.id === normalized.id)) return prev;
+      return [normalized, ...prev].slice(0, 20);
     });
-    setUnreadCount((prev) => prev + (notification.isRead ? 0 : 1));
+    setUnreadCount((prev) => prev + (normalized.isRead ? 0 : 1));
 
     toast.custom((t) => (
       <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-sm rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-lg`}>
@@ -58,8 +64,8 @@ export function NotificationProvider({ children }) {
             <Bell className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-gray-900">{notification.title}</p>
-            <p className="mt-0.5 line-clamp-2 text-sm text-gray-600">{notification.message || notification.description}</p>
+            <p className="truncate text-sm font-semibold text-gray-900">{normalized.title}</p>
+            <p className="mt-0.5 line-clamp-2 text-sm text-gray-600">{normalized.message || normalized.description}</p>
           </div>
         </div>
       </div>
@@ -110,17 +116,25 @@ export function NotificationProvider({ children }) {
   }, [refreshUnreadCount, upsertRealtimeNotification]);
 
   const markAsRead = useCallback(async (notification) => {
-    if (!notification || notification.isRead) return notification;
+    const normalized = normalizeNotification(notification);
+    if (!normalized || normalized.isRead) return normalized;
     const response = await notificationApi.markAsRead(notification.id);
-    const updated = response.data;
-    setNotifications((prev) => prev.map((item) => item.id === notification.id ? updated : item));
+    const updated = normalizeNotification(response.data?.data || response.data);
+    setNotifications((prev) => prev.map((item) => item.id === normalized.id ? updated : item));
     setUnreadCount((prev) => Math.max(0, prev - 1));
     return updated;
   }, []);
 
   const markAllAsRead = useCallback(async () => {
     await notificationApi.markAllAsRead();
-    setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true, readAt: item.readAt || new Date().toISOString() })));
+    setNotifications((prev) => prev.map((item) => ({
+      ...item,
+      isRead: true,
+      read: true,
+      is_read: true,
+      readAt: item.readAt || new Date().toISOString(),
+      read_at: item.readAt || new Date().toISOString(),
+    })));
     setUnreadCount(0);
   }, []);
 

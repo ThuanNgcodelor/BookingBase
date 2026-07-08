@@ -3,6 +3,7 @@ import { DoorOpen, Car, CalendarClock, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '../api/authApi';
 import { dashboardApi } from '../api/dashboardApi';
+import { formatViDate, formatViTime } from '../utils/dateTime';
 
 export default function ClientDashboard() {
   const navigate = useNavigate();
@@ -18,6 +19,13 @@ export default function ClientDashboard() {
         .finally(() => setLoading(false));
     }
   }, [user?.id]);
+
+  const openDetail = (activity) => {
+    if (!activity?.id) {
+      return;
+    }
+    navigate(`/admin/approvals/${activity.id}`);
+  };
 
   return (
     <div className="w-full flex-1">
@@ -75,7 +83,19 @@ export default function ClientDashboard() {
             <div className="py-8 text-center text-gray-400">Đang tải...</div>
           ) : upcoming.length > 0 ? (
             upcoming.map((act) => (
-              <div key={act.id} className="p-6 border-b border-gray-50 hover:bg-gray-50/50 transition-colors flex items-center justify-between last:border-0">
+              <div
+                key={act.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => openDetail(act)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openDetail(act);
+                  }
+                }}
+                className="group p-6 border-b border-gray-50 hover:bg-gray-50/50 transition-colors flex items-center justify-between last:border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              >
                 <div className="flex items-center gap-4">
                   <div className={`p-3 rounded-xl ${act.type === 'ROOM' ? 'bg-blue-50 text-blue-600' : 'bg-teal-50 text-teal-600'}`}>
                     {act.type === 'ROOM' ? <DoorOpen className="w-6 h-6" /> : <Car className="w-6 h-6" />}
@@ -89,15 +109,16 @@ export default function ClientDashboard() {
                         }`}>
                         {act.status === 'APPROVED' ? 'Đã duyệt' : act.status === 'PENDING' ? 'Chờ duyệt' : act.status}
                       </span>
+                      <span className="text-[11px] font-medium text-blue-600 opacity-0 transition-opacity group-hover:opacity-100">Xem chi tiết</span>
                     </div>
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-sm font-semibold text-gray-800">
-                    {new Date(act.startTime).toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' })}
+                    {formatViDate(act.startTime, { weekday: 'long', day: '2-digit', month: '2-digit' })}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
-                    {new Date(act.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - {new Date(act.endTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                    {formatViTime(act.startTime)} - {formatViTime(act.endTime)}
                   </div>
                 </div>
               </div>
