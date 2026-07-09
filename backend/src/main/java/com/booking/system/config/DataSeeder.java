@@ -1,6 +1,7 @@
 package com.booking.system.config;
 
 import com.booking.system.entity.BookingRoom;
+import com.booking.system.entity.Department;
 import com.booking.system.entity.Room;
 import com.booking.system.entity.User;
 import com.booking.system.entity.Vehicle;
@@ -10,6 +11,7 @@ import com.booking.system.enums.RoleEnum;
 import com.booking.system.enums.RoomStatus;
 import com.booking.system.enums.UserStatus;
 import com.booking.system.repository.BookingRoomRepository;
+import com.booking.system.repository.DepartmentRepository;
 import com.booking.system.repository.RoomRepository;
 import com.booking.system.repository.UserRepository;
 import com.booking.system.repository.VehicleRepository;
@@ -34,6 +36,7 @@ public class DataSeeder implements CommandLineRunner {
     private final VehicleRepository vehicleRepository;
     private final VehicleTypeRepository vehicleTypeRepository;
     private final BookingRoomRepository bookingRoomRepository;
+    private final DepartmentRepository departmentRepository;
 
     @Override
     @Transactional
@@ -43,6 +46,7 @@ public class DataSeeder implements CommandLineRunner {
         createAdminIfNotExists("pdien@booking.base.vn", "Phan Thị Minh Diễn", "admin123");
         createAdminIfNotExists("btho@booking.base.vn", "Bùi Hữu Thọ", "admin123");
 
+        seedDepartments();
         Room pTruyenThong = seedRooms();
         seedVehicles();
         seedBookingRoom(duy, pTruyenThong);
@@ -56,10 +60,36 @@ public class DataSeeder implements CommandLineRunner {
             admin.setPassword(passwordEncoder.encode(password));
             admin.setRole(RoleEnum.ADMIN);
             admin.setStatus(UserStatus.ACTIVE);
+            admin.setJobPosition("Quản trị viên");
             userRepository.save(admin);
             System.out.println("Đã tạo tài khoản mẫu: " + email);
             return admin;
         });
+    }
+
+    private void seedDepartments() {
+        if (departmentRepository.count() > 0) {
+            return;
+        }
+
+        String[] departments = {
+                "Tổ chức",
+                "Kế Toán",
+                "Kế hoạch vật tư",
+                "Kinh Doanh",
+                "Xuất nhập khẩu",
+                "Kĩ thuật",
+                "Quản lý chất lượng",
+                "Kho vận"
+        };
+
+        for (String name : departments) {
+            if (!departmentRepository.existsByNameIgnoreCase(name)) {
+                Department department = new Department();
+                department.setName(name);
+                departmentRepository.save(department);
+            }
+        }
     }
 
     private Room seedRooms() {

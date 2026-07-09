@@ -89,6 +89,23 @@ public class NotificationEventListener {
             emailService.sendBookingApprovedEmail(recipient.getEmail(), email.resourceType(), email.title());
         } else if (email.type() == NotificationEvent.EmailType.BOOKING_REJECTED) {
             emailService.sendBookingRejectedEmail(recipient.getEmail(), email.resourceType(), email.title(), email.reason());
+        } else if (email.type() == NotificationEvent.EmailType.PROFILE_UPDATE_REQUESTED_TO_ADMIN) {
+            emailService.sendProfileUpdateRequestedEmailToAdmin(
+                    recipient.getEmail(),
+                    email.requesterName(),
+                    email.title()
+            );
+        } else if (email.type() == NotificationEvent.EmailType.PROFILE_UPDATE_APPROVED) {
+            emailService.sendProfileUpdateApprovedEmail(
+                    recipient.getEmail(),
+                    email.title()
+            );
+        } else if (email.type() == NotificationEvent.EmailType.PROFILE_UPDATE_REJECTED) {
+            emailService.sendProfileUpdateRejectedEmail(
+                    recipient.getEmail(),
+                    email.title(),
+                    email.reason()
+            );
         }
     }
 
@@ -122,6 +139,13 @@ public class NotificationEventListener {
                 && event.sourceId() != null
                 && ("BOOKING_ROOM".equals(event.sourceType()) || "BOOKING_CAR".equals(event.sourceType()))) {
             return "/admin/approvals/" + event.sourceId();
+        }
+        if (event.type() == NotificationType.PROFILE_UPDATE_REQUESTED && event.sourceId() != null) {
+            return "/admin/profile-approvals/" + event.sourceId();
+        }
+        if (event.type() == NotificationType.PROFILE_UPDATE_APPROVED
+                || event.type() == NotificationType.PROFILE_UPDATE_REJECTED) {
+            return "/profile";
         }
         return notification.getTargetUrl();
     }

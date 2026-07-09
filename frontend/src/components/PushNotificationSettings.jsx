@@ -1,4 +1,3 @@
-import { BellOff, BellRing, Loader2, Smartphone } from 'lucide-react';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 
 export default function PushNotificationSettings({ className = '' }) {
@@ -32,15 +31,10 @@ export default function PushNotificationSettings({ className = '' }) {
   return (
     <section className={`bg-white rounded-xl border border-gray-200 shadow-sm p-5 sm:p-6 ${className}`}>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-3">
-          <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${subscribed ? 'bg-green-50 text-green-600' : 'bg-blue-50 text-blue-600'}`}>
-            {subscribed ? <BellRing className="h-5 w-5" /> : <Smartphone className="h-5 w-5" />}
-          </div>
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-            <p className="mt-1 text-sm text-gray-600">{message}</p>
-            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-          </div>
+        <div>
+          <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+          <p className="mt-1 text-sm text-gray-600">{message}</p>
+          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
         </div>
 
         <button
@@ -53,14 +47,7 @@ export default function PushNotificationSettings({ className = '' }) {
               : 'bg-blue-600 text-white hover:bg-blue-700'
           }`}
         >
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : subscribed ? (
-            <BellOff className="h-4 w-4" />
-          ) : (
-            <BellRing className="h-4 w-4" />
-          )}
-          {subscribed ? 'Tắt' : 'Bật'}
+          {loading ? 'Đang xử lý...' : subscribed ? 'Tắt' : 'Bật'}
         </button>
       </div>
     </section>

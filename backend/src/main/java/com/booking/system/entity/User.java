@@ -29,8 +29,11 @@ public class User {
     @Column(name = "password")
     private String password;
     
-    @Column(name = "avatar_url")
+    @Column(name = "avatar_url", length = 1000)
     private String avatarUrl;
+
+    @Column(name = "job_position")
+    private String jobPosition;
     
     @Enumerated(EnumType.STRING)
     private RoleEnum role;

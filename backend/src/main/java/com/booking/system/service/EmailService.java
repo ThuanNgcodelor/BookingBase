@@ -72,6 +72,56 @@ public class EmailService {
         sendEmail(userEmail, subject, buildHtmlTemplate(subject, content));
     }
 
+    @Async
+    public void sendProfileUpdateRequestedEmailToAdmin(String adminEmail, String requesterName, String title) {
+        String subject = "🔔 Yêu cầu cập nhật hồ sơ mới từ " + requesterName;
+        String content = "<h2>Yêu cầu cập nhật hồ sơ</h2>"
+                + "<p>Xin chào Admin,</p>"
+                + "<p>Bạn vừa nhận được một yêu cầu cập nhật hồ sơ từ <b>" + requesterName + "</b>.</p>"
+                + "<div style='background-color: #f8fafc; padding: 15px; border-left: 4px solid #3b82f6; margin: 20px 0;'>"
+                + "  <p style='margin: 0;'><b>Tiêu đề:</b> " + title + "</p>"
+                + "</div>"
+                + "<p>Vui lòng truy cập hệ thống để xem chi tiết và phê duyệt.</p>"
+                + "<div style='text-align: center; margin: 30px 0;'>"
+                + "  <a href='https://cfcbooking.io.vn/admin/profile-approvals' style='background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;'>ĐI TỚI TRANG PHÊ DUYỆT</a>"
+                + "</div>";
+        sendEmail(adminEmail, subject, buildHtmlTemplate(subject, content));
+    }
+
+    @Async
+    public void sendProfileUpdateApprovedEmail(String userEmail, String title) {
+        String subject = "✅ Hồ sơ của bạn ĐÃ ĐƯỢC PHÊ DUYỆT";
+        String content = "<h2>Hồ sơ đã được phê duyệt</h2>"
+                + "<p>Xin chào,</p>"
+                + "<p>Yêu cầu cập nhật hồ sơ của bạn đã được Admin chấp thuận.</p>"
+                + "<div style='background-color: #f0fdf4; padding: 15px; border-left: 4px solid #22c55e; margin: 20px 0;'>"
+                + "  <p style='margin: 0;'><b>Nội dung:</b> " + title + "</p>"
+                + "</div>"
+                + "<p>Thông tin của bạn đã được cập nhật trong hệ thống.</p>"
+                + "<div style='text-align: center; margin: 30px 0;'>"
+                + "  <a href='https://cfcbooking.io.vn/profile' style='background-color: #22c55e; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;'>XEM HỒ SƠ</a>"
+                + "</div>";
+        sendEmail(userEmail, subject, buildHtmlTemplate(subject, content));
+    }
+
+    @Async
+    public void sendProfileUpdateRejectedEmail(String userEmail, String title, String reason) {
+        String subject = "❌ Yêu cầu cập nhật hồ sơ BỊ TỪ CHỐI";
+        String content = "<h2>Yêu cầu không được chấp thuận</h2>"
+                + "<p>Xin chào,</p>"
+                + "<p>Rất tiếc, yêu cầu cập nhật hồ sơ của bạn đã bị từ chối.</p>"
+                + "<div style='background-color: #fef2f2; padding: 15px; border-left: 4px solid #ef4444; margin: 20px 0;'>"
+                + "  <p style='margin: 0; margin-bottom: 8px;'><b>Nội dung:</b> " + title + "</p>"
+                + "  <p style='margin: 0; color: #b91c1c;'><b>Lý do từ chối:</b> "
+                + (reason != null && !reason.isEmpty() ? reason : "Không có lý do cụ thể") + "</p>"
+                + "</div>"
+                + "<p>Vui lòng liên hệ trực tiếp với người phê duyệt nếu bạn cần thêm thông tin.</p>"
+                + "<div style='text-align: center; margin: 30px 0;'>"
+                + "  <a href='https://cfcbooking.io.vn/profile' style='background-color: #64748b; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;'>TRỞ VỀ HỒ SƠ</a>"
+                + "</div>";
+        sendEmail(userEmail, subject, buildHtmlTemplate(subject, content));
+    }
+
     private String buildHtmlTemplate(String title, String bodyContent) {
         return "<!DOCTYPE html>"
                 + "<html>"

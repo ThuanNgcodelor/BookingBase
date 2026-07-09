@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Home, CalendarRange, CarFront, Bell, CheckSquare, Settings, Menu } from 'lucide-react';
+import { LogOut, Home, CalendarRange, CarFront, Bell, CheckSquare, Settings, Menu, FileCheck2 } from 'lucide-react';
 import { authApi } from '../api/authApi';
 import { NotificationProvider } from '../contexts/NotificationContext';
 import { useNotificationCenter } from '../contexts/useNotificationCenter';
@@ -85,6 +85,7 @@ function DashboardLayoutContent() {
 
   const adminNavItems = [
     { name: 'Duyệt yêu cầu', path: '/admin/approvals', icon: CheckSquare, show: isApprover },
+    { name: 'Duyệt hồ sơ', path: '/admin/profile-approvals', icon: FileCheck2, show: isAdmin },
     { name: 'Tài nguyên', path: '/admin/resources', icon: Settings, show: isAdmin },
   ];
 
@@ -217,7 +218,9 @@ function DashboardLayoutContent() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate hover:text-blue-700 transition-colors">{user.fullName}</p>
                   <p className="text-[11px] text-gray-500 truncate">
-                    {user.position || (user.role === 'ADMIN' ? 'Quản trị viên' : 'Nhân viên')}
+                    {user.departmentName || user.department || ''}
+                    {user.departmentName || user.department ? ' · ' : ''}
+                    {user.position || user.jobPosition || (user.role === 'ADMIN' ? 'Quản trị viên' : 'Nhân viên')}
                   </p>
                 </div>
               </div>

@@ -1,207 +1,347 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import toast from 'react-hot-toast';
 import { Button } from '../components/ui/Button';
-import { User, Mail, Briefcase, Shield, Key, Camera } from 'lucide-react';
-
 import { authApi } from '../api/authApi';
+import { userApi } from '../api/userApi';
+import { profileRequestApi } from '../api/profileRequestApi';
 import PushNotificationSettings from '../components/PushNotificationSettings';
+import { formatViDateTime } from '../utils/dateTime';
+
+const POSITION_OPTIONS = [
+  'Nhân viên',
+  'Chuyên viên',
+  'Tổ trưởng',
+  'Phó phòng',
+  'Trưởng phòng',
+  'Phó giám đốc',
+  'Tổng giám đốc',
+];
 
 export default function Profile() {
+  const fileInputRef = useRef(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [user, setUser] = useState(authApi.getUser() || {});
-  const [fullName, setFullName] = useState(user.fullName || '');
-  const [email, setEmail] = useState(user.email || '');
-  const [department, setDepartment] = useState(user.department || '');
-  const [position, setPosition] = useState(user.position || (user.role === 'ADMIN' ? 'Quản trị viên' : 'Nhân viên'));
+  const [departments, setDepartments] = useState([]);
+  const [latestRequest, setLatestRequest] = useState(null);
   const [imageError, setImageError] = useState(false);
+  const [form, setForm] = useState({
+    fullName: '',
+    avatarUrl: '',
+    departmentId: '',
+    position: '',
+  });
 
-  const handleUpdateProfile = () => {
-    let newRole = 'EMPLOYEE';
-    if (user.role === 'ADMIN') {
-      newRole = 'ADMIN';
-    } else if (position !== 'Nhân viên') {
-      newRole = 'MANAGER';
-    }
+  useEffect(() => {
+    let active = true;
 
-    const updatedUser = { ...user, fullName, email, department, position, role: newRole };
-    setUser(updatedUser);
-    authApi.updateUser(updatedUser);
-    alert('Cập nhật thông tin thành công!');
+    const load = async () => {
+      try {
+        const [me, departmentList, request] = await Promise.all([
+          userApi.getMe(),
+          userApi.getDepartments(),
+          profileRequestApi.getCurrent().catch(() => null),
+        ]);
+
+        if (!active) return;
+
+        setUser(me || {});
+        setDepartments(departmentList || []);
+        setLatestRequest(request || null);
+        authApi.updateUser(me || {});
+
+        setForm({
+          fullName: me?.fullName || '',
+          avatarUrl: me?.avatarUrl || '',
+          departmentId: me?.departmentId || '',
+          position: me?.position || 'Nhân viên',
+        });
+      } catch (error) {
+        console.error(error);
+        toast.error('Không thể tải thông tin tài khoản');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const departmentName = useMemo(() => {
+    return departments.find((item) => item.id === form.departmentId)?.name || user.departmentName || '';
+  }, [departments, form.departmentId, user.departmentName]);
+
+  const hasPendingRequest = latestRequest?.status === 'PENDING';
+  const avatarSrc = form.avatarUrl || user.avatarUrl || '';
+
+  const handleAvatarPick = () => {
+    fileInputRef.current?.click();
   };
 
+  const handleAvatarChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Vui lòng chọn file ảnh hợp lệ');
+      return;
+    }
+
+    if (file.size > 3 * 1024 * 1024) {
+      toast.error('Ảnh không được lớn hơn 3MB');
+      return;
+    }
+
+    try {
+      const resized = await resizeImageToDataUrl(file, 512, 0.9);
+      setForm((prev) => ({ ...prev, avatarUrl: resized }));
+      setImageError(false);
+    } catch (error) {
+      console.error(error);
+      toast.error('Không thể xử lý ảnh. Vui lòng thử file khác.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (hasPendingRequest) {
+      toast.error('Bạn đang có một yêu cầu chờ duyệt');
+      return;
+    }
+
+    if (!form.fullName.trim()) {
+      toast.error('Họ và tên không được để trống');
+      return;
+    }
+
+    if (!form.departmentId) {
+      toast.error('Vui lòng chọn phòng ban');
+      return;
+    }
+
+    if (!form.position) {
+      toast.error('Vui lòng chọn chức vụ');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const submitted = await profileRequestApi.submit({
+        fullName: form.fullName.trim(),
+        avatarUrl: form.avatarUrl || null,
+        departmentId: form.departmentId,
+        position: form.position,
+      });
+
+      setLatestRequest(submitted);
+      toast.success('Đã gửi yêu cầu cập nhật hồ sơ. Vui lòng chờ admin phê duyệt.');
+    } catch (error) {
+      toast.error(error.response?.data?.message || error.message || 'Gửi yêu cầu thất bại');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center text-sm text-gray-500">
+        Đang tải thông tin hồ sơ...
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Thiết lập tài khoản</h1>
-        <p className="text-gray-500 mt-1">Quản lý thông tin cá nhân và bảo mật của bạn.</p>
+    <div className="mx-auto w-full max-w-6xl px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
+      <div className="mb-5 sm:mb-8">
+        <h1 className="text-xl font-semibold tracking-tight text-gray-900 sm:text-2xl">Thiết lập tài khoản</h1>
+        <p className="mt-1 text-sm text-gray-500 sm:text-base">Quản lý thông tin cá nhân và trạng thái yêu cầu cập nhật của bạn.</p>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-8 items-start">
+      {latestRequest && (
+        <div
+          className={`mb-5 rounded-lg border px-3 py-3 text-sm sm:px-4 ${
+            latestRequest.status === 'PENDING'
+              ? 'border-amber-200 bg-amber-50 text-amber-900'
+              : latestRequest.status === 'APPROVED'
+                ? 'border-green-200 bg-green-50 text-green-900'
+                : 'border-red-200 bg-red-50 text-red-900'
+          }`}
+        >
+          <div className="font-medium">
+            Yêu cầu gần nhất: {latestRequest.status === 'PENDING' ? 'đang chờ duyệt' : latestRequest.status === 'APPROVED' ? 'đã được duyệt' : 'đã bị từ chối'}
+          </div>
+          <div className="mt-1 text-xs leading-5">
+            {latestRequest.requestedAt ? `Gửi lúc ${formatViDateTime(latestRequest.requestedAt)}.` : ''}
+            {latestRequest.reviewReason ? ` Lý do: ${latestRequest.reviewReason}` : ''}
+          </div>
+        </div>
+      )}
 
-        {/* Cột Trái: Card Ảnh đại diện */}
-        <div className="w-full lg:w-1/3 shrink-0">
-          <div className="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
-            <div className="h-32 bg-gradient-to-r from-blue-600 to-blue-400"></div>
-            <div className="px-6 pb-6 text-center -mt-16">
-              <div className="relative inline-block mb-4">
-                <div className="w-32 h-32 mx-auto bg-white rounded-full flex items-center justify-center text-5xl font-bold text-blue-600 shadow-md border-4 border-white overflow-hidden">
-                  {user.avatarUrl && !imageError ? (
-                    <img
-                      src={user.avatarUrl}
-                      alt="Avatar"
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                      onError={() => setImageError(true)}
-                    />
-                  ) : (
-                    user.fullName?.charAt(0) || 'U'
-                  )}
-                </div>
-                <button className="absolute bottom-0 right-0 p-2 bg-white rounded-full shadow-md border border-gray-200 text-gray-600 hover:text-blue-600 transition-colors">
-                  <Camera className="w-4 h-4" />
-                </button>
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+        <div className="w-full lg:w-1/3">
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div className="h-20 bg-gradient-to-r from-blue-600 to-sky-500 sm:h-28" />
+            <div className="px-4 pb-5 text-center -mt-10 sm:px-6 sm:pb-6 sm:-mt-12">
+              <button
+                type="button"
+                onClick={handleAvatarPick}
+                className="relative mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-white shadow-md sm:h-28 sm:w-28"
+              >
+                {avatarSrc && !imageError ? (
+                  <img
+                    src={avatarSrc}
+                    alt="Avatar"
+                    className="h-full w-full object-cover"
+                    referrerPolicy="no-referrer"
+                    onError={() => setImageError(true)}
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-gray-100 text-2xl font-semibold text-gray-600 sm:text-3xl">
+                    {(form.fullName || user.fullName || 'U').charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <span className="absolute inset-x-0 bottom-0 bg-black/45 px-2 py-1 text-[10px] font-medium text-white">
+                  Nhấn để đổi ảnh
+                </span>
+              </button>
+
+              <div className="mt-3 sm:mt-4">
+                <h2 className="text-lg font-semibold text-gray-900 sm:text-xl">{form.fullName || user.fullName || 'Người dùng'}</h2>
+                <p className="mt-1 text-sm text-gray-500">{departmentName || 'Chưa có phòng ban'}</p>
+                <p className="mt-1 text-sm text-gray-500">{form.position || user.position || 'Nhân viên'}</p>
               </div>
-              <h2 className="text-xl font-bold text-gray-900">{user.fullName || 'Người dùng ẩn danh'}</h2>
-              <p className="text-gray-500 mt-1 text-sm">
-                {user.position || (user.role === 'ADMIN' ? 'Quản trị viên hệ thống' : 'Nhân viên')}
-              </p>
-            </div>
-            <div className="border-t border-gray-100 p-4 bg-gray-50/50">
-              <p className="text-xs text-gray-500 text-center">Tài khoản được tạo tự động qua hệ thống nội bộ.</p>
+
+              <div className="mt-4 text-left">
+                <div className="rounded-lg bg-gray-50 px-3 py-3 text-sm text-gray-600 sm:px-4">
+                  <div className="text-xs uppercase tracking-wide text-gray-400">Email</div>
+                  <div className="mt-1 break-all text-gray-900">{user.email}</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Cột Phải: Các Form chỉnh sửa */}
-        <div className="w-full lg:w-2/3 space-y-6">
+        <div className="w-full lg:w-2/3 space-y-5 sm:space-y-6">
+          <form onSubmit={handleSubmit} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6 lg:p-8">
+            <h3 className="mb-4 text-base font-semibold text-gray-900 sm:mb-6 sm:text-lg">Thông tin cơ bản</h3>
 
-          {/* Card: Thông tin chung */}
-          <div className="bg-white shadow-sm border border-gray-200 rounded-xl p-6 sm:p-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
-              <User className="w-5 h-5 text-blue-600" /> Thông tin cơ bản
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Họ và tên</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <User className="w-4 h-4 text-gray-400" />
-                  </div>
-                  <input
-                    type="text"
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                  />
-                </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+              <div className="sm:col-span-2">
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">Họ và tên</label>
+                <input
+                  type="text"
+                  value={form.fullName}
+                  onChange={(e) => setForm((prev) => ({ ...prev, fullName: e.target.value }))}
+                  className="w-full rounded-md border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Địa chỉ Email</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Mail className="w-4 h-4 text-gray-400" />
-                  </div>
-                  <input
-                    type="email"
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">Địa chỉ Email</label>
+                <input
+                  type="email"
+                  value={user.email || ''}
+                  readOnly
+                  className="w-full rounded-md border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-500 outline-none"
+                />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Phòng ban công tác</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Briefcase className="w-4 h-4 text-gray-400" />
-                  </div>
-                  <select
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm bg-white"
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
-                  >
-                    <option value="">Chọn phòng ban</option>
-                    <option value="Kế Toán">Kế Toán</option>
-                    <option value="Kế hoạch vật tư">Kế hoạch vật tư</option>
-                    <option value="Kinh Doanh">Kinh Doanh</option>
-                    <option value="Xuất nhập khẩu">Xuất nhập khẩu</option>
-                    <option value="Tổ chức">Tổ chức</option>
-                    <option value="Kĩ thuật">Kĩ thuật</option>
-                    <option value="Quản lý chất lượng">Quản lý chất lượng</option>
-                    <option value="Kho vận">Kho vận</option>
-
-                  </select>
-                </div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">Phòng ban công tác</label>
+                <select
+                  value={form.departmentId}
+                  onChange={(e) => setForm((prev) => ({ ...prev, departmentId: e.target.value }))}
+                  className="w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">Chọn phòng ban</option>
+                  {departments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Chức vụ (Quyền hạn)</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Shield className="w-4 h-4 text-gray-400" />
-                  </div>
-                  <select
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm bg-white"
-                    value={position}
-                    onChange={(e) => setPosition(e.target.value)}
-                  >
-                    <option value="Nhân viên">Nhân viên</option>
-                    <option value="Tổng Giám đốc">Tổng Giám đốc</option>
-                    <option value="Phó Giám đốc">Phó Giám đốc</option>
-                    <option value="Trưởng phòng">Trưởng phòng</option>
-                    <option value="Phó phòng">Phó phòng</option>
-                    {user.role === 'ADMIN' && (
-                      <option value="Quản trị viên">Quản trị viên</option>
-                    )}
-                  </select>
-                </div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">Chức vụ</label>
+                <select
+                  value={form.position}
+                  onChange={(e) => setForm((prev) => ({ ...prev, position: e.target.value }))}
+                  className="w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">Chọn chức vụ</option>
+                  {POSITION_OPTIONS.map((position) => (
+                    <option key={position} value={position}>
+                      {position}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
-            <div className="mt-8 flex justify-end">
-              <Button onClick={handleUpdateProfile}>Lưu thay đổi</Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleAvatarChange}
+            />
+
+            <div className="mt-6 flex items-center justify-end gap-3 sm:mt-8">
+              <Button type="submit" disabled={submitting || hasPendingRequest}>
+                {submitting ? 'Đang gửi...' : hasPendingRequest ? 'Đang chờ duyệt' : 'Gửi yêu cầu cập nhật'}
+              </Button>
             </div>
-          </div>
+          </form>
 
           <PushNotificationSettings />
-
-          {/* Card: Đổi mật khẩu */}
-          <div className="bg-white shadow-sm border border-gray-200 rounded-xl p-6 sm:p-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
-              <Key className="w-5 h-5 text-gray-500" /> Đổi mật khẩu
-            </h3>
-
-            {user.hasPassword === false ? (
-              <div className="text-sm text-gray-600 bg-gray-50 p-4 rounded-md border border-gray-200">
-                Tài khoản của bạn được liên kết và bảo mật bởi Google. Bạn không cần và không thể đổi mật khẩu tại đây.
-              </div>
-            ) : (
-              <div className="max-w-md space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Mật khẩu hiện tại</label>
-                  <input type="password" placeholder="Nhập mật khẩu cũ" className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm" />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Mật khẩu mới</label>
-                  <input type="password" placeholder="Nhập mật khẩu mới" className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm" />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Xác nhận mật khẩu mới</label>
-                  <input type="password" placeholder="Nhập lại mật khẩu mới" className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm" />
-                </div>
-
-                <div className="pt-2">
-                  <Button variant="outline" className="w-full sm:w-auto">Cập nhật mật khẩu</Button>
-                </div>
-              </div>
-            )}
-          </div>
-
         </div>
       </div>
     </div>
   );
+}
+
+async function resizeImageToDataUrl(file, maxSize = 512, quality = 0.9) {
+  const imageUrl = await readFileAsDataUrl(file);
+  const image = await loadImage(imageUrl);
+
+  const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+  const width = Math.max(1, Math.round(image.width * scale));
+  const height = Math.max(1, Math.round(image.height * scale));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('Canvas context not available');
+  }
+
+  context.drawImage(image, 0, 0, width, height);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Failed to load image'));
+    image.src = src;
+  });
 }

@@ -33,6 +33,9 @@ public record NotificationEvent(
     public enum EmailType {
         BOOKING_CREATED_TO_ADMIN,
         BOOKING_APPROVED,
-        BOOKING_REJECTED
+        BOOKING_REJECTED,
+        PROFILE_UPDATE_REQUESTED_TO_ADMIN,
+        PROFILE_UPDATE_APPROVED,
+        PROFILE_UPDATE_REJECTED
     }
 }

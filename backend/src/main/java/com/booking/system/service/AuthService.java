@@ -112,7 +112,15 @@ public class AuthService {
         );
 
         AuthResponse.UserDto userDto = new AuthResponse.UserDto(
-                user.getId(), user.getEmail(), user.getFullName(), user.getRole().name(), user.getAvatarUrl(), user.getPassword() != null
+                user.getId(),
+                user.getEmail(),
+                user.getFullName(),
+                user.getRole().name(),
+                user.getAvatarUrl(),
+                user.getDepartment() == null ? null : user.getDepartment().getId(),
+                user.getDepartment() == null ? null : user.getDepartment().getName(),
+                user.getJobPosition(),
+                user.getPassword() != null
         );
 
         return new AuthResponse(accessToken, refreshToken, userDto);
@@ -130,7 +138,15 @@ public class AuthService {
         );
 
         AuthResponse.UserDto userDto = new AuthResponse.UserDto(
-                user.getId(), user.getEmail(), user.getFullName(), user.getRole().name(), user.getAvatarUrl(), user.getPassword() != null
+                user.getId(),
+                user.getEmail(),
+                user.getFullName(),
+                user.getRole().name(),
+                user.getAvatarUrl(),
+                user.getDepartment() == null ? null : user.getDepartment().getId(),
+                user.getDepartment() == null ? null : user.getDepartment().getName(),
+                user.getJobPosition(),
+                user.getPassword() != null
         );
 
         return new AuthResponse(accessToken, refreshToken, userDto);
@@ -158,7 +174,15 @@ public class AuthService {
         redisTemplate.opsForValue().set("refreshToken:" + email, newRefreshToken, 7, TimeUnit.DAYS);
 
         AuthResponse.UserDto userDto = new AuthResponse.UserDto(
-                user.getId(), user.getEmail(), user.getFullName(), user.getRole().name(), user.getAvatarUrl(), user.getPassword() != null
+                user.getId(),
+                user.getEmail(),
+                user.getFullName(),
+                user.getRole().name(),
+                user.getAvatarUrl(),
+                user.getDepartment() == null ? null : user.getDepartment().getId(),
+                user.getDepartment() == null ? null : user.getDepartment().getName(),
+                user.getJobPosition(),
+                user.getPassword() != null
         );
 
         return new AuthResponse(newAccessToken, newRefreshToken, userDto);

@@ -21,6 +21,9 @@ public class AuthResponse {
         private String fullName;
         private String role;
         private String avatarUrl;
+        private String departmentId;
+        private String departmentName;
+        private String position;
         private boolean hasPassword;
     }
 }

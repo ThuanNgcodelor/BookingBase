@@ -7,6 +7,8 @@ import Dashboard from './pages/Dashboard';
 import RoomBooking from './pages/RoomBooking';
 import CarBooking from './pages/CarBooking';
 import AdminApprovals from './pages/AdminApprovals';
+import AdminProfileApprovals from './pages/AdminProfileApprovals';
+import AdminProfileApprovalDetail from './pages/AdminProfileApprovalDetail';
 import BookingDetail from './pages/BookingDetail';
 import Notifications from './pages/Notifications';
 import Profile from './pages/Profile';
@@ -105,6 +107,16 @@ function App() {
             <ApproverRoute>
               <AdminApprovals />
             </ApproverRoute>
+          } />
+          <Route path="profile-approvals" element={
+            <AdminRoute>
+              <AdminProfileApprovals />
+            </AdminRoute>
+          } />
+          <Route path="profile-approvals/:id" element={
+            <AdminRoute>
+              <AdminProfileApprovalDetail />
+            </AdminRoute>
           } />
           {/* Bạn có thể thêm các route quản lý tài nguyên khác vào đây */}
         </Route>
