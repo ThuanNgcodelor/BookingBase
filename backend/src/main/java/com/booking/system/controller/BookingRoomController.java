@@ -4,10 +4,14 @@ import com.booking.system.dto.ApiResponse;
 import com.booking.system.dto.BookingRoomRequest;
 import com.booking.system.entity.BookingRoom;
 import com.booking.system.service.BookingRoomService;
+import com.booking.system.enums.BookingStatus;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/v1/bookings/rooms")
@@ -31,9 +35,30 @@ public class BookingRoomController {
         }
     }
 
+    /**
+     * API lấy danh sách đặt phòng. Nếu có start/end thì chỉ trả booking giao với range calendar.
+     */
     @GetMapping
-    public ResponseEntity<ApiResponse<java.util.List<BookingRoom>>> getAllBookings() {
-        return ResponseEntity.ok(ApiResponse.success(bookingRoomService.getAllBookings(), "Lấy danh sách đặt phòng thành công"));
+    public ResponseEntity<ApiResponse<java.util.List<BookingRoom>>> getAllBookings(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
+            @RequestParam(required = false) String roomId,
+            @RequestParam(required = false) BookingStatus status) {
+        if (start == null && end == null) {
+            return ResponseEntity.ok(ApiResponse.success(bookingRoomService.getAllBookings(), "Lấy danh sách đặt phòng thành công"));
+        }
+
+        if (start == null || end == null) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(400, "Cần truyền đủ start và end khi lọc theo khoảng ngày"));
+        }
+
+        try {
+            return ResponseEntity.ok(ApiResponse.success(
+                    bookingRoomService.getBookingsByDateRange(start, end, roomId, status),
+                    "Lấy danh sách đặt phòng theo khoảng ngày thành công"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(400, e.getMessage()));
+        }
     }
 
     @PostMapping("/{id}/cancel")

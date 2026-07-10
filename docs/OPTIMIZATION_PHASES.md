@@ -270,6 +270,8 @@ Booking dùng `LocalDateTime`. Nếu timezone giữa browser/backend/container/D
 
 # Phase 2: Tối ưu Calendar/API performance
 
+> Trạng thái: Đã triển khai bước nền tảng load booking theo range ngày cho calendar phòng/xe. Các tối ưu memo/render/mobile vẫn nên làm tiếp ở các bước sau.
+
 ## 2.1 Mục tiêu
 
 Giảm tải khi calendar có nhiều booking.
@@ -331,6 +333,39 @@ Frontend:
 - Khi đổi tháng/tuần/ngày, gọi lại API theo range.
 - Chỉ giữ event của range hiện tại hoặc cache range gần nhất nếu cần.
 
+#### Trạng thái triển khai
+
+Đã làm:
+
+- Backend giữ backward compatibility cho `GET /api/v1/bookings/rooms` và `GET /api/v1/bookings/cars` khi không truyền `start/end`.
+- Backend hỗ trợ query theo range:
+  - `GET /api/v1/bookings/rooms?start=yyyy-MM-ddTHH:mm:ss&end=yyyy-MM-ddTHH:mm:ss`
+  - `GET /api/v1/bookings/cars?start=yyyy-MM-ddTHH:mm:ss&end=yyyy-MM-ddTHH:mm:ss`
+- Repository dùng logic giao khoảng:
+  - `existing.startTime < rangeEnd`
+  - `existing.endTime > rangeStart`
+- Frontend calendar phòng/xe tính range theo `month/week/day` và gọi lại API khi đổi `date/view`.
+- Frontend không còn load toàn bộ booking cho calendar phòng/xe trong flow chính.
+
+File đã chỉnh:
+
+- `backend/src/main/java/com/booking/system/controller/BookingRoomController.java`
+- `backend/src/main/java/com/booking/system/controller/BookingCarController.java`
+- `backend/src/main/java/com/booking/system/service/BookingRoomService.java`
+- `backend/src/main/java/com/booking/system/service/BookingCarService.java`
+- `backend/src/main/java/com/booking/system/repository/BookingRoomRepository.java`
+- `backend/src/main/java/com/booking/system/repository/BookingCarRepository.java`
+- `frontend/src/api/bookingApi.js`
+- `frontend/src/pages/RoomBooking.jsx`
+- `frontend/src/pages/CarBooking.jsx`
+
+Còn nên làm tiếp:
+
+- Memo hóa `filteredEvents`.
+- Truyền `roomId/vehicleId` lên API nếu muốn giảm dữ liệu hơn nữa khi chọn resource.
+- Bổ sung cancel request/guard stale response khi user chuyển view rất nhanh.
+- Responsive hook cho resize/xoay màn hình.
+
 #### Test cần chạy
 
 - Mở calendar tháng hiện tại.
@@ -338,6 +373,8 @@ Frontend:
 - Chuyển tuần/ngày.
 - Filter theo phòng/xe.
 - Đảm bảo không mất event ở đầu/cuối range.
+- Kiểm tra API cũ không query params vẫn trả dữ liệu như trước.
+- Kiểm tra API thiếu một trong hai tham số `start/end` trả lỗi 400.
 
 ---
 

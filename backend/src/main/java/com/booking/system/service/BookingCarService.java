@@ -16,6 +16,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -103,6 +104,21 @@ public class BookingCarService {
     
     public List<BookingCar> getAllBookings() {
         return bookingCarRepository.findAll();
+    }
+
+    /**
+     * Lấy lịch đặt xe theo khoảng ngày calendar đang hiển thị.
+     */
+    public List<BookingCar> getBookingsByDateRange(
+            LocalDateTime startTime,
+            LocalDateTime endTime,
+            String vehicleId,
+            BookingStatus status) {
+        if (startTime.isAfter(endTime) || startTime.isEqual(endTime)) {
+            throw new RuntimeException("Thời gian bắt đầu phải trước thời gian kết thúc.");
+        }
+
+        return bookingCarRepository.findByDateRange(startTime, endTime, vehicleId, status);
     }
 
     @Transactional

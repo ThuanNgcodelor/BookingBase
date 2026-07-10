@@ -4,11 +4,14 @@ import com.booking.system.dto.ApiResponse;
 import com.booking.system.dto.BookingCarRequest;
 import com.booking.system.entity.BookingCar;
 import com.booking.system.service.BookingCarService;
+import com.booking.system.enums.BookingStatus;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -30,9 +33,30 @@ public class BookingCarController {
         }
     }
     
+    /**
+     * API lấy danh sách đặt xe. Nếu có start/end thì chỉ trả booking giao với range calendar.
+     */
     @GetMapping
-    public ResponseEntity<ApiResponse<List<BookingCar>>> getAllBookings() {
-        return ResponseEntity.ok(ApiResponse.success(bookingCarService.getAllBookings(), "Lấy danh sách đặt xe thành công"));
+    public ResponseEntity<ApiResponse<List<BookingCar>>> getAllBookings(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
+            @RequestParam(required = false) String vehicleId,
+            @RequestParam(required = false) BookingStatus status) {
+        if (start == null && end == null) {
+            return ResponseEntity.ok(ApiResponse.success(bookingCarService.getAllBookings(), "Lấy danh sách đặt xe thành công"));
+        }
+
+        if (start == null || end == null) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(400, "Cần truyền đủ start và end khi lọc theo khoảng ngày"));
+        }
+
+        try {
+            return ResponseEntity.ok(ApiResponse.success(
+                    bookingCarService.getBookingsByDateRange(start, end, vehicleId, status),
+                    "Lấy danh sách đặt xe theo khoảng ngày thành công"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(400, e.getMessage()));
+        }
     }
 
     @PostMapping("/{id}/cancel")

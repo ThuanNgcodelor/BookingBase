@@ -17,6 +17,9 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class BookingRoomService {
@@ -115,6 +118,21 @@ public class BookingRoomService {
 
     public java.util.List<BookingRoom> getAllBookings() {
         return bookingRoomRepository.findAll();
+    }
+
+    /**
+     * Lấy lịch đặt phòng theo khoảng ngày calendar đang hiển thị.
+     */
+    public List<BookingRoom> getBookingsByDateRange(
+            LocalDateTime startTime,
+            LocalDateTime endTime,
+            String roomId,
+            BookingStatus status) {
+        if (startTime.isAfter(endTime) || startTime.isEqual(endTime)) {
+            throw new RuntimeException("Thời gian bắt đầu phải trước thời gian kết thúc.");
+        }
+
+        return bookingRoomRepository.findByDateRange(startTime, endTime, roomId, status);
     }
 
     @Transactional

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
-import { format, parse, startOfWeek, getDay } from 'date-fns';
+import { endOfDay, endOfMonth, endOfWeek, format, getDay, parse, startOfDay, startOfMonth, startOfWeek } from 'date-fns';
 import { vi } from 'date-fns/locale/vi';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { useNavigate } from 'react-router-dom';
@@ -35,6 +35,27 @@ const messages = {
   showMore: total => `+ Xem thêm (${total})`
 };
 
+const getCalendarRange = (currentDate, currentView) => {
+  if (currentView === 'month') {
+    return {
+      start: startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 }),
+      end: endOfWeek(endOfMonth(currentDate), { weekStartsOn: 1 })
+    };
+  }
+
+  if (currentView === 'day') {
+    return {
+      start: startOfDay(currentDate),
+      end: endOfDay(currentDate)
+    };
+  }
+
+  return {
+    start: startOfWeek(currentDate, { weekStartsOn: 1 }),
+    end: endOfWeek(currentDate, { weekStartsOn: 1 })
+  };
+};
+
 export default function RoomBooking() {
   const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
@@ -44,17 +65,30 @@ export default function RoomBooking() {
   const [date, setDate] = useState(new Date());
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchRooms = async () => {
       try {
-        const [roomsData, bookingsData] = await Promise.all([
-          resourceApi.getRooms(),
-          bookingApi.getRoomBookings()
-        ]);
-        
+        const roomsData = await resourceApi.getRooms();
         setRooms(roomsData || []);
         if (roomsData && roomsData.length > 0) {
           setSelectedRoom(roomsData[0].id);
         }
+      } catch (err) {
+        console.error("Lỗi tải danh sách phòng:", err);
+      }
+    };
+
+    fetchRooms();
+  }, []);
+
+  useEffect(() => {
+    const fetchBookings = async () => {
+      const range = getCalendarRange(date, view);
+
+      try {
+        const bookingsData = await bookingApi.getRoomBookings({
+          start: format(range.start, "yyyy-MM-dd'T'HH:mm:ss"),
+          end: format(range.end, "yyyy-MM-dd'T'HH:mm:ss")
+        });
 
         const mappedEvents = (bookingsData || []).map(b => ({
           id: b.id,
@@ -71,8 +105,9 @@ export default function RoomBooking() {
         console.error("Lỗi tải dữ liệu lịch:", err);
       }
     };
-    fetchData();
-  }, []);
+
+    fetchBookings();
+  }, [date, view]);
 
   const filteredEvents = events.filter(e => 
     e.status !== 'REJECTED' && e.status !== 'CANCELLED' && 
