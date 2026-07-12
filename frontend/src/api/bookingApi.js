@@ -1,13 +1,19 @@
 import { baseApi } from './baseApi';
 
 export const bookingApi = {
-  getRoomBookings: async (params) => {
-    const response = await baseApi.get('/bookings/rooms', { params });
+  getRoomBookings: async (params, options = {}) => {
+    const response = await baseApi.get('/bookings/rooms', {
+      params,
+      signal: options.signal,
+    });
     return response.data.data;
   },
 
-  getCarBookings: async (params) => {
-    const response = await baseApi.get('/bookings/cars', { params });
+  getCarBookings: async (params, options = {}) => {
+    const response = await baseApi.get('/bookings/cars', {
+      params,
+      signal: options.signal,
+    });
     return response.data.data;
   },
 

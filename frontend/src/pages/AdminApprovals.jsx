@@ -5,6 +5,12 @@ import { Building2, Car, Clock } from 'lucide-react';
 import { bookingApi } from '../api/bookingApi';
 import { formatViDateTime } from '../utils/dateTime';
 
+function buildCarPurpose(booking) {
+  if (booking.title) return booking.title;
+  const route = [booking.departure, booking.destination].filter(Boolean).join(' - ');
+  return route || 'Đặt xe công tác';
+}
+
 export default function AdminApprovals() {
   const navigate = useNavigate();
   const [pendingRequests, setPendingRequests] = useState([]);
@@ -36,7 +42,7 @@ export default function AdminApprovals() {
           id: c.id,
           type: 'CAR',
           resourceName: c.vehicle ? `${c.vehicle.vehicleType?.name} - ${c.vehicle.licensePlate}` : 'Chưa xếp xe',
-          purpose: c.title,
+          purpose: buildCarPurpose(c),
           timeInfo: `${formatViDateTime(c.startTime)} - ${formatViDateTime(c.endTime)}`,
           booker: {
             fullName: c.requester?.fullName,

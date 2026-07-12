@@ -1,10 +1,30 @@
 import { useContext } from 'react';
-import { NotificationContext } from './NotificationContextCore';
+import { NotificationListContext, NotificationUnreadContext } from './NotificationContextCore';
 
 export function useNotificationCenter() {
-  const context = useContext(NotificationContext);
-  if (!context) {
+  const listContext = useContext(NotificationListContext);
+  const unreadContext = useContext(NotificationUnreadContext);
+  if (!listContext || !unreadContext) {
     throw new Error('useNotificationCenter must be used inside NotificationProvider');
+  }
+  return {
+    ...listContext,
+    ...unreadContext,
+  };
+}
+
+export function useNotificationList() {
+  const context = useContext(NotificationListContext);
+  if (!context) {
+    throw new Error('useNotificationList must be used inside NotificationProvider');
+  }
+  return context;
+}
+
+export function useNotificationUnreadCount() {
+  const context = useContext(NotificationUnreadContext);
+  if (!context) {
+    throw new Error('useNotificationUnreadCount must be used inside NotificationProvider');
   }
   return context;
 }

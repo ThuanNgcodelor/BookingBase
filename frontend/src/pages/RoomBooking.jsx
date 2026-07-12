@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
 import { endOfDay, endOfMonth, endOfWeek, format, getDay, parse, startOfDay, startOfMonth, startOfWeek } from 'date-fns';
 import { vi } from 'date-fns/locale/vi';
@@ -11,6 +11,7 @@ import CustomEvent from '../components/calendar/CustomEvent';
 import CustomMonthEvent from '../components/calendar/CustomMonthEvent';
 import CustomDateHeader from '../components/calendar/CustomDateHeader';
 import '../components/calendar/bookingCalendar.css';
+import { useResponsiveCalendarView } from '../hooks/useResponsiveCalendarView';
 import { parseApiDateTime } from '../utils/dateTime';
 import toast from 'react-hot-toast';
 
@@ -56,63 +57,111 @@ const getCalendarRange = (currentDate, currentView) => {
   };
 };
 
-export default function RoomBooking() {
+function isRequestCanceled(error) {
+  return error?.name === 'CanceledError' || error?.name === 'AbortError' || error?.code === 'ERR_CANCELED';
+}
+
+function RoomBooking() {
   const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
-  const [events, setEvents] = useState([]);
+  const [bookings, setBookings] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState('');
-  const [view, setView] = useState(window.innerWidth < 768 ? 'day' : 'week');
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const { view, setView, layoutRevision } = useResponsiveCalendarView();
   const [date, setDate] = useState(new Date());
+  const bookingRequestSeq = useRef(0);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchRooms = async () => {
       try {
-        const roomsData = await resourceApi.getRooms();
+        const roomsData = await resourceApi.getRooms({ signal: controller.signal });
         setRooms(roomsData || []);
         if (roomsData && roomsData.length > 0) {
-          setSelectedRoom(roomsData[0].id);
+          setSelectedRoom((currentRoom) => currentRoom || roomsData[0].id);
         }
       } catch (err) {
+        if (isRequestCanceled(err)) return;
         console.error("Lỗi tải danh sách phòng:", err);
       }
     };
 
     fetchRooms();
+
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const requestSeq = bookingRequestSeq.current + 1;
+    bookingRequestSeq.current = requestSeq;
+
     const fetchBookings = async () => {
       const range = getCalendarRange(date, view);
 
       try {
         const bookingsData = await bookingApi.getRoomBookings({
           start: format(range.start, "yyyy-MM-dd'T'HH:mm:ss"),
-          end: format(range.end, "yyyy-MM-dd'T'HH:mm:ss")
-        });
+          end: format(range.end, "yyyy-MM-dd'T'HH:mm:ss"),
+          roomId: selectedRoom || undefined,
+          status: selectedStatus || undefined,
+        }, { signal: controller.signal });
 
-        const mappedEvents = (bookingsData || []).map(b => ({
-          id: b.id,
-          title: b.title,
-          start: parseApiDateTime(b.startTime),
-          end: parseApiDateTime(b.endTime),
-          user: b.requester?.fullName || 'User',
-          avatarUrl: b.requester?.avatarUrl,
-          status: b.status,
-          roomId: b.room?.id
-        }));
-        setEvents(mappedEvents);
+        if (controller.signal.aborted || requestSeq !== bookingRequestSeq.current) return;
+        setBookings(bookingsData || []);
       } catch (err) {
+        if (isRequestCanceled(err) || requestSeq !== bookingRequestSeq.current) return;
         console.error("Lỗi tải dữ liệu lịch:", err);
       }
     };
 
     fetchBookings();
-  }, [date, view]);
 
-  const filteredEvents = events.filter(e => 
-    e.status !== 'REJECTED' && e.status !== 'CANCELLED' && 
+    return () => controller.abort();
+  }, [date, selectedRoom, selectedStatus, view]);
+
+  const events = useMemo(() => (bookings || []).map(b => ({
+    id: b.id,
+    title: b.title,
+    start: parseApiDateTime(b.startTime),
+    end: parseApiDateTime(b.endTime),
+    user: b.requester?.fullName || 'User',
+    avatarUrl: b.requester?.avatarUrl,
+    status: b.status,
+    roomId: b.room?.id
+  })), [bookings]);
+
+  const filteredEvents = useMemo(() => events.filter(e =>
+    e.status !== 'REJECTED' && e.status !== 'CANCELLED' &&
     (selectedRoom ? e.roomId === selectedRoom : true)
-  );
+  ), [events, selectedRoom]);
+
+  const calendarComponents = useMemo(() => ({
+    event: CustomEvent,
+    month: {
+      event: CustomMonthEvent
+    },
+    header: CustomDateHeader
+  }), []);
+
+  const calendarFormats = useMemo(() => ({
+    timeGutterFormat: "H'h'",
+  }), []);
+
+  const handleCreateClick = useCallback(() => navigate('/rooms/create'), [navigate]);
+
+  const handleSelectSlot = useCallback((slotInfo) => {
+    if (slotInfo.start < new Date()) {
+      toast.error("Không thể đặt lịch trong quá khứ!");
+      return;
+    }
+    navigate('/rooms/create', { state: { start: slotInfo.start, end: slotInfo.end } });
+  }, [navigate]);
+
+  const handleSelectEvent = useCallback((event) => {
+    navigate(`/admin/approvals/${event.id}`);
+  }, [navigate]);
 
   return (
     <div className="w-full h-full flex flex-col bg-white">
@@ -126,11 +175,14 @@ export default function RoomBooking() {
           resources={rooms}
           selectedResource={selectedRoom}
           onResourceChange={setSelectedRoom}
+          selectedStatus={selectedStatus}
+          onStatusChange={setSelectedStatus}
           resourceType="room"
-          onCreateClick={() => navigate('/rooms/create')}
+          onCreateClick={handleCreateClick}
         />
 
         <Calendar
+          key={`room-calendar-${layoutRevision}`}
           localizer={localizer}
           events={filteredEvents}
           messages={messages}
@@ -150,29 +202,17 @@ export default function RoomBooking() {
           showAllEvents={false}
           allDayMaxRows={1}
           dayLayoutAlgorithm="no-overlap"
-          onSelectSlot={(slotInfo) => {
-            if (slotInfo.start < new Date()) {
-              toast.error("Không thể đặt lịch trong quá khứ!");
-              return;
-            }
-            navigate('/rooms/create', { state: { start: slotInfo.start, end: slotInfo.end } });
-          }}
-          onSelectEvent={(event) => navigate(`/admin/approvals/${event.id}`)}
+          onSelectSlot={handleSelectSlot}
+          onSelectEvent={handleSelectEvent}
           scrollToTime={new Date(1970, 1, 1, 7)}
-          formats={{ 
-            timeGutterFormat: "H'h'",
-          }}
+          formats={calendarFormats}
           toolbar={false}
-          components={{
-            event: CustomEvent,
-            month: {
-              event: CustomMonthEvent
-            },
-            header: CustomDateHeader
-          }}
+          components={calendarComponents}
           className="booking-calendar h-full font-sans text-sm"
         />
       </div>
     </div >
   );
 }
+
+export default memo(RoomBooking);

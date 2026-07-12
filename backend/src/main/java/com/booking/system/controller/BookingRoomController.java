@@ -3,12 +3,14 @@ package com.booking.system.controller;
 import com.booking.system.dto.ApiResponse;
 import com.booking.system.dto.BookingRoomRequest;
 import com.booking.system.entity.BookingRoom;
+import com.booking.system.entity.User;
 import com.booking.system.service.BookingRoomService;
 import com.booking.system.enums.BookingStatus;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -24,9 +26,11 @@ public class BookingRoomController {
      * API tạo mới yêu cầu đặt phòng họp.
      */
     @PostMapping
-    public ResponseEntity<ApiResponse<BookingRoom>> createBooking(@Valid @RequestBody BookingRoomRequest request) {
+    public ResponseEntity<ApiResponse<BookingRoom>> createBooking(
+            @AuthenticationPrincipal User user,
+            @Valid @RequestBody BookingRoomRequest request) {
         try {
-            BookingRoom booking = bookingRoomService.createBooking(request);
+            BookingRoom booking = bookingRoomService.createBooking(request, user);
             return ResponseEntity.ok(ApiResponse.success(booking, "Tạo yêu cầu đặt phòng thành công"));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(400, e.getMessage()));

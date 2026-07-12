@@ -13,6 +13,8 @@
  */
 import { precacheAndRoute } from 'workbox-precaching';
 
+const OFFLINE_FALLBACK_URL = '/offline.html';
+
 // Manifest precache được inject lúc build (mảng self.__WB_MANIFEST).
 precacheAndRoute(self.__WB_MANIFEST || []);
 
@@ -29,6 +31,27 @@ self.addEventListener('install', () => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener('fetch', (event) => {
+  if (event.request.mode !== 'navigate') {
+    return;
+  }
+
+  event.respondWith(
+    (async () => {
+      try {
+        return await fetch(event.request);
+      } catch {
+        const cachedFallback = await caches.match(OFFLINE_FALLBACK_URL, { ignoreSearch: true });
+        return cachedFallback || new Response('Offline', {
+          status: 503,
+          statusText: 'Offline',
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        });
+      }
+    })()
+  );
 });
 
 /**

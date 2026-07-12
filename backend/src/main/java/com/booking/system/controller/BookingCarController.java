@@ -3,12 +3,14 @@ package com.booking.system.controller;
 import com.booking.system.dto.ApiResponse;
 import com.booking.system.dto.BookingCarRequest;
 import com.booking.system.entity.BookingCar;
+import com.booking.system.entity.User;
 import com.booking.system.service.BookingCarService;
 import com.booking.system.enums.BookingStatus;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -22,9 +24,11 @@ public class BookingCarController {
     private final BookingCarService bookingCarService;
 
     @PostMapping
-    public ResponseEntity<ApiResponse<BookingCar>> createBooking(@Valid @RequestBody BookingCarRequest request) {
+    public ResponseEntity<ApiResponse<BookingCar>> createBooking(
+            @AuthenticationPrincipal User user,
+            @Valid @RequestBody BookingCarRequest request) {
         try {
-            BookingCar booking = bookingCarService.createBooking(request);
+            BookingCar booking = bookingCarService.createBooking(request, user);
             return ResponseEntity.ok(ApiResponse.success(booking, "Tạo yêu cầu đặt xe thành công"));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(400, e.getMessage()));

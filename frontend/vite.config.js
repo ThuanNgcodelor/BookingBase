@@ -3,6 +3,10 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const googlePopupHeaders = {
+  'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+}
+
 export default defineConfig({
   plugins: [
     react(),
@@ -45,6 +49,29 @@ export default defineConfig({
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
       },
+      integration: {
+        configureCustomSWViteBuild(inlineConfig) {
+          const rollupOptions = inlineConfig.build?.rollupOptions
+          const rollupOutput = rollupOptions?.output
+          if (rollupOutput && !Array.isArray(rollupOutput)) {
+            delete rollupOutput.inlineDynamicImports
+          }
+
+          inlineConfig.build = {
+            ...inlineConfig.build,
+            rolldownOptions: {
+              ...inlineConfig.build?.rolldownOptions,
+              input: rollupOptions?.input,
+              plugins: rollupOptions?.plugins,
+              output: {
+                ...inlineConfig.build?.rolldownOptions?.output,
+                ...(!Array.isArray(rollupOutput) ? { entryFileNames: rollupOutput?.entryFileNames } : {}),
+                codeSplitting: false,
+              },
+            },
+          }
+        },
+      },
       devOptions: {
         enabled: true,
         type: 'module',
@@ -55,11 +82,13 @@ export default defineConfig({
   server: {
     host: true,
     allowedHosts: ['cfcbooking.io.vn', 'www.cfcbooking.io.vn'],
+    headers: googlePopupHeaders,
   },
   preview: {
     host: true,              // Mở ra để Cloudflare Tunnel có thể kết nối
     port: 4173,
     allowedHosts: ['cfcbooking.io.vn', 'www.cfcbooking.io.vn'],
+    headers: googlePopupHeaders,
   },
   define: {
     global: 'window',

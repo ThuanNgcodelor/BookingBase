@@ -12,7 +12,6 @@ public class BookingRoomRequest {
     @NotBlank(message = "Mã phòng không được để trống")
     private String roomId;
 
-    @NotBlank(message = "ID người đặt không được để trống")
     private String requesterId;
 
     @NotBlank(message = "Tiêu đề cuộc họp không được để trống")

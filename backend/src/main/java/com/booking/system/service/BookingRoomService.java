@@ -35,7 +35,7 @@ public class BookingRoomService {
      * @return BookingRoom đã tạo
      */
     @Transactional
-    public BookingRoom createBooking(BookingRoomRequest request) {
+    public BookingRoom createBooking(BookingRoomRequest request, User requesterPrincipal) {
         if (request.getStartTime().isAfter(request.getEndTime()) || request.getStartTime().isEqual(request.getEndTime())) {
             throw new RuntimeException("Thời gian bắt đầu phải trước thời gian kết thúc.");
         }
@@ -49,7 +49,7 @@ public class BookingRoomService {
             throw new RuntimeException("Phòng đang không hoạt động (Bảo trì hoặc Ngưng sử dụng)");
         }
 
-        User requester = userRepository.findById(request.getRequesterId())
+        User requester = userRepository.findById(requirePrincipalId(requesterPrincipal))
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người đặt"));
 
         // 2. Kiểm tra trùng lịch (Dựa trên những booking đã duyệt hoặc đang chờ duyệt)
@@ -168,5 +168,12 @@ public class BookingRoomService {
                     null
             ));
         }
+    }
+
+    private String requirePrincipalId(User principal) {
+        if (principal == null || principal.getId() == null || principal.getId().isBlank()) {
+            throw new RuntimeException("ChÆ°a Ä‘Äƒng nháº­p");
+        }
+        return principal.getId();
     }
 }

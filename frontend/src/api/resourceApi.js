@@ -1,13 +1,17 @@
 import { baseApi } from './baseApi';
 
 export const resourceApi = {
-  getRooms: async () => {
-    const response = await baseApi.get('/resources/rooms');
+  getRooms: async (options = {}) => {
+    const response = await baseApi.get('/resources/rooms', {
+      signal: options.signal,
+    });
     return response.data.data;
   },
   
-  getCars: async () => {
-    const response = await baseApi.get('/resources/cars');
+  getCars: async (options = {}) => {
+    const response = await baseApi.get('/resources/cars', {
+      signal: options.signal,
+    });
     return response.data.data;
   }
 };

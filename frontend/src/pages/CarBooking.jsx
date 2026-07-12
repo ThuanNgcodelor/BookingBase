@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
 import { endOfDay, endOfMonth, endOfWeek, format, getDay, parse, startOfDay, startOfMonth, startOfWeek } from 'date-fns';
 import { vi } from 'date-fns/locale/vi';
@@ -11,6 +11,7 @@ import CustomEvent from '../components/calendar/CustomEvent';
 import CustomMonthEvent from '../components/calendar/CustomMonthEvent';
 import CustomDateHeader from '../components/calendar/CustomDateHeader';
 import '../components/calendar/bookingCalendar.css';
+import { useResponsiveCalendarView } from '../hooks/useResponsiveCalendarView';
 import { parseApiDateTime } from '../utils/dateTime';
 import toast from 'react-hot-toast';
 
@@ -56,63 +57,117 @@ const getCalendarRange = (currentDate, currentView) => {
   };
 };
 
-export default function CarBooking() {
+function isRequestCanceled(error) {
+  return error?.name === 'CanceledError' || error?.name === 'AbortError' || error?.code === 'ERR_CANCELED';
+}
+
+function buildCarEventTitle(booking) {
+  if (booking.title) return booking.title;
+  const route = [booking.departure, booking.destination].filter(Boolean).join(' - ');
+  return route || 'Đặt xe';
+}
+
+function CarBooking() {
   const navigate = useNavigate();
   const [cars, setCars] = useState([]);
-  const [events, setEvents] = useState([]);
+  const [bookings, setBookings] = useState([]);
   const [selectedCar, setSelectedCar] = useState('');
-  const [view, setView] = useState(window.innerWidth < 768 ? 'day' : 'week');
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const { view, setView, layoutRevision } = useResponsiveCalendarView();
   const [date, setDate] = useState(new Date());
+  const bookingRequestSeq = useRef(0);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchCars = async () => {
       try {
-        const carsData = await resourceApi.getCars();
+        const carsData = await resourceApi.getCars({ signal: controller.signal });
         setCars(carsData || []);
         if (carsData && carsData.length > 0) {
-          setSelectedCar(carsData[0].id);
+          setSelectedCar((currentCar) => currentCar || carsData[0].id);
         }
       } catch (err) {
+        if (isRequestCanceled(err)) return;
         console.error("Lỗi tải danh sách xe:", err);
       }
     };
 
     fetchCars();
+
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const requestSeq = bookingRequestSeq.current + 1;
+    bookingRequestSeq.current = requestSeq;
+
     const fetchBookings = async () => {
       const range = getCalendarRange(date, view);
 
       try {
         const bookingsData = await bookingApi.getCarBookings({
           start: format(range.start, "yyyy-MM-dd'T'HH:mm:ss"),
-          end: format(range.end, "yyyy-MM-dd'T'HH:mm:ss")
-        });
+          end: format(range.end, "yyyy-MM-dd'T'HH:mm:ss"),
+          vehicleId: selectedCar || undefined,
+          status: selectedStatus || undefined,
+        }, { signal: controller.signal });
 
-        const mappedEvents = (bookingsData || []).map(b => ({
-          id: b.id,
-          title: b.title,
-          start: parseApiDateTime(b.startTime),
-          end: parseApiDateTime(b.endTime),
-          user: b.requester?.fullName || 'User',
-          avatarUrl: b.requester?.avatarUrl,
-          status: b.status,
-          vehicleId: b.vehicle?.id
-        }));
-        setEvents(mappedEvents);
+        if (controller.signal.aborted || requestSeq !== bookingRequestSeq.current) return;
+        setBookings(bookingsData || []);
       } catch (err) {
+        if (isRequestCanceled(err) || requestSeq !== bookingRequestSeq.current) return;
         console.error("Lỗi tải dữ liệu lịch xe:", err);
       }
     };
 
     fetchBookings();
-  }, [date, view]);
 
-  const filteredEvents = events.filter(e => 
-    e.status !== 'REJECTED' && e.status !== 'CANCELLED' && 
+    return () => controller.abort();
+  }, [date, selectedCar, selectedStatus, view]);
+
+  const events = useMemo(() => (bookings || []).map(b => ({
+    id: b.id,
+    title: buildCarEventTitle(b),
+    start: parseApiDateTime(b.startTime),
+    end: parseApiDateTime(b.endTime),
+    user: b.requester?.fullName || 'User',
+    avatarUrl: b.requester?.avatarUrl,
+    status: b.status,
+    vehicleId: b.vehicle?.id
+  })), [bookings]);
+
+  const filteredEvents = useMemo(() => events.filter(e =>
+    e.status !== 'REJECTED' && e.status !== 'CANCELLED' &&
     (selectedCar ? e.vehicleId === selectedCar : true)
-  );
+  ), [events, selectedCar]);
+
+  const calendarComponents = useMemo(() => ({
+    event: CustomEvent,
+    month: {
+      event: CustomMonthEvent
+    },
+    header: CustomDateHeader
+  }), []);
+
+  const calendarFormats = useMemo(() => ({
+    timeGutterFormat: "H'h'",
+  }), []);
+
+  const handleCreateClick = useCallback(() => navigate('/cars/create'), [navigate]);
+
+  const handleSelectSlot = useCallback((slotInfo) => {
+    if (slotInfo.start < new Date()) {
+      toast.error("Không thể đặt lịch trong quá khứ!");
+      return;
+    }
+    navigate('/cars/create', { state: { start: slotInfo.start, end: slotInfo.end } });
+  }, [navigate]);
+
+  const handleSelectEvent = useCallback((event) => {
+    navigate(`/admin/approvals/${event.id}`);
+  }, [navigate]);
 
   return (
     <div className="w-full h-full flex flex-col bg-white">
@@ -126,11 +181,14 @@ export default function CarBooking() {
           resources={cars}
           selectedResource={selectedCar}
           onResourceChange={setSelectedCar}
+          selectedStatus={selectedStatus}
+          onStatusChange={setSelectedStatus}
           resourceType="car"
-          onCreateClick={() => navigate('/cars/create')}
+          onCreateClick={handleCreateClick}
         />
 
         <Calendar
+          key={`car-calendar-${layoutRevision}`}
           localizer={localizer}
           events={filteredEvents}
           messages={messages}
@@ -150,29 +208,17 @@ export default function CarBooking() {
           showAllEvents={false}
           allDayMaxRows={1}
           dayLayoutAlgorithm="no-overlap"
-          onSelectSlot={(slotInfo) => {
-            if (slotInfo.start < new Date()) {
-              toast.error("Không thể đặt lịch trong quá khứ!");
-              return;
-            }
-            navigate('/cars/create', { state: { start: slotInfo.start, end: slotInfo.end } });
-          }}
-          onSelectEvent={(event) => navigate(`/admin/approvals/${event.id}`)}
+          onSelectSlot={handleSelectSlot}
+          onSelectEvent={handleSelectEvent}
           scrollToTime={new Date(1970, 1, 1, 6)}
-          formats={{ 
-            timeGutterFormat: "H'h'",
-          }}
+          formats={calendarFormats}
           toolbar={false}
-          components={{
-            event: CustomEvent,
-            month: {
-              event: CustomMonthEvent
-            },
-            header: CustomDateHeader
-          }}
+          components={calendarComponents}
           className="booking-calendar h-full font-sans text-sm"
         />
       </div>
     </div>
   );
 }
+
+export default memo(CarBooking);

@@ -30,6 +30,26 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers(HttpMethod.GET,
+                        "/",
+                        "/index.html",
+                        "/offline.html",
+                        "/manifest.webmanifest",
+                        "/sw.js",
+                        "/favicon.ico",
+                        "/logo*.png",
+                        "/og-image.png",
+                        "/assets/**",
+                        "/icons/**",
+                        "/login",
+                        "/register",
+                        "/forgot-password",
+                        "/rooms/**",
+                        "/cars/**",
+                        "/notifications/**",
+                        "/profile/**",
+                        "/admin/**"
+                ).permitAll()
                 .requestMatchers("/api/v1/auth/**").permitAll() // Mở endpoint đăng nhập
                 .requestMatchers("/ws/**").permitAll()
                 .anyRequest().authenticated()

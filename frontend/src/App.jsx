@@ -17,6 +17,7 @@ import Notifications from './pages/Notifications';
 import Profile from './pages/Profile';
 import CreateRoomBooking from './pages/CreateRoomBooking';
 import CreateCarBooking from './pages/CreateCarBooking';
+import ServiceWorkerNavigateListener from './components/ServiceWorkerNavigateListener';
 import Cookies from 'js-cookie';
 import { authApi } from './api/authApi';
 
@@ -79,6 +80,7 @@ function App() {
 
   return (
     <>
+      <ServiceWorkerNavigateListener />
       <Toaster position="top-right" />
       <Routes>
       <Route path="/login" element={

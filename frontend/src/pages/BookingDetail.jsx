@@ -1,13 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, User, Clock, FileText, XCircle, Send } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, User, Clock, FileText, XCircle } from 'lucide-react';
 import { bookingApi } from '../api/bookingApi';
 import { approvalApi } from '../api/approvalApi';
 import { authApi } from '../api/authApi';
-import { userApi } from '../api/userApi';
 import { Button } from '../components/ui/Button';
 import { formatViDateTime } from '../utils/dateTime';
 import toast from 'react-hot-toast';
+
+function getRoleLabel(role) {
+  if (role === 'ADMIN') return 'Quản trị hệ thống';
+  if (role === 'MANAGER') return 'Quản lý';
+  return 'Nhân viên';
+}
+
+function getActionLabel(status) {
+  if (status === 'APPROVED') return 'Đã phê duyệt';
+  if (status === 'REJECTED') return 'Đã từ chối';
+  return 'Đang chờ';
+}
+
+function buildCarTitle(request) {
+  if (request?.title) return request.title;
+  if (request?.departure || request?.destination) {
+    return `${request.departure || 'Điểm đi'} - ${request.destination || 'Điểm đến'}`;
+  }
+  return 'Chi tiết đặt xe';
+}
 
 export default function BookingDetail() {
   const { id } = useParams();
@@ -16,32 +35,47 @@ export default function BookingDetail() {
   const [loading, setLoading] = useState(true);
   const [type, setType] = useState(''); // 'ROOM' or 'CAR'
   const [note, setNote] = useState('');
-  const [approvers, setApprovers] = useState([]);
-  const [showAllApprovers, setShowAllApprovers] = useState(false);
+  const [approvalSteps, setApprovalSteps] = useState([]);
+  const [showAllApprovalSteps, setShowAllApprovalSteps] = useState(false);
 
   const currentUser = authApi.getUser();
-  const isAdmin = currentUser?.role === 'ADMIN';
   const isApprover = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER';
 
   useEffect(() => {
     const fetchDetail = async () => {
       try {
-        const [rooms, cars, approversList] = await Promise.all([
+        const [rooms, cars] = await Promise.all([
           bookingApi.getRoomBookings(),
-          bookingApi.getCarBookings(),
-          userApi.getApprovers()
+          bookingApi.getCarBookings()
         ]);
-        setApprovers(approversList || []);
 
         const roomReq = (rooms || []).find(r => r.id === id || `REQ-00${r.id}` === id);
+        let selectedRequest = roomReq;
+        let selectedType = roomReq ? 'ROOM' : '';
+
         if (roomReq) {
-          setRequest(roomReq);
-          setType('ROOM');
+          selectedRequest = roomReq;
+          selectedType = 'ROOM';
         } else {
           const carReq = (cars || []).find(c => c.id === id || `REQ-00${c.id}` === id);
           if (carReq) {
-            setRequest(carReq);
-            setType('CAR');
+            selectedRequest = carReq;
+            selectedType = 'CAR';
+          }
+        }
+
+        if (selectedRequest) {
+          setRequest(selectedRequest);
+          setType(selectedType);
+
+          try {
+            const steps = selectedType === 'ROOM'
+              ? await approvalApi.getRoomApprovalSteps(selectedRequest.id)
+              : await approvalApi.getCarApprovalSteps(selectedRequest.id);
+            setApprovalSteps(steps || []);
+          } catch (stepsError) {
+            console.error("Không lấy được lịch sử duyệt:", stepsError);
+            setApprovalSteps([]);
           }
         }
       } catch (e) {
@@ -55,7 +89,7 @@ export default function BookingDetail() {
 
   const handleApprove = async () => {
     try {
-      const payload = { approverId: currentUser.id, note: note || 'Đồng ý duyệt' };
+      const payload = { approverId: currentUser.id, reason: note || 'Đồng ý duyệt' };
       if (type === 'ROOM') {
         await approvalApi.approveRoom(request.id, payload);
       } else {
@@ -74,7 +108,7 @@ export default function BookingDetail() {
       return;
     }
     try {
-      const payload = { approverId: currentUser.id, note: note };
+      const payload = { approverId: currentUser.id, reason: note };
       if (type === 'ROOM') {
         await approvalApi.rejectRoom(request.id, payload);
       } else {
@@ -91,6 +125,23 @@ export default function BookingDetail() {
   if (!request) return <div className="p-8 text-center text-red-500">Không tìm thấy yêu cầu!</div>;
 
   const resourceName = type === 'ROOM' ? request.room?.name : request.vehicle ? `${request.vehicle.vehicleType?.name} - ${request.vehicle.licensePlate}` : 'Chưa xếp xe';
+  const displayTitle = type === 'ROOM'
+    ? (request.title || resourceName || 'Chi tiết đặt phòng')
+    : buildCarTitle(request);
+  const latestApprovalStep = approvalSteps[0];
+  const latestReason = latestApprovalStep?.reason;
+  const approvers = approvalSteps.map(step => ({
+    id: step.id,
+    fullName: step.approver?.fullName || 'Không rõ người duyệt',
+    avatarUrl: step.approver?.avatarUrl,
+    role: step.approver?.role,
+    department: {
+      name: step.approver?.departmentName || step.approver?.jobPosition || getRoleLabel(step.approver?.role)
+    },
+    status: step.status
+  }));
+  const showAllApprovers = showAllApprovalSteps;
+  const setShowAllApprovers = setShowAllApprovalSteps;
 
   return (
     <div className="flex flex-col min-h-full shrink-0 bg-white rounded-lg shadow-sm overflow-hidden">
@@ -101,7 +152,7 @@ export default function BookingDetail() {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <span className="font-medium text-sm uppercase tracking-wide">
-            {request.title}
+            {displayTitle}
           </span>
         </div>
       </div>
@@ -111,7 +162,7 @@ export default function BookingDetail() {
         <div className="flex-1 w-full bg-white md:border-r border-gray-100 flex flex-col">
           <div className="p-6 border-b border-gray-100">
             <h1 className="text-xl font-bold text-gray-900 uppercase mb-2">
-              {request.title}
+              {displayTitle}
             </h1>
             <div className="flex items-center gap-2 text-sm">
               <span className="text-gray-500">Trạng thái:</span>
@@ -172,6 +223,32 @@ export default function BookingDetail() {
           <div className="bg-gray-50 p-6 flex-1 flex flex-col">
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Lý do duyệt / từ chối</h3>
 
+            {request.status !== 'PENDING' && (
+              <div className={`rounded-lg border bg-white p-4 ${request.status === 'REJECTED' ? 'border-red-100' : 'border-green-100'}`}>
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  {request.status === 'REJECTED' ? (
+                    <XCircle className="w-4 h-4 text-red-600" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  )}
+                  <span className={request.status === 'REJECTED' ? 'text-red-700' : 'text-green-700'}>
+                    {getActionLabel(latestApprovalStep?.status || request.status)}
+                  </span>
+                  {latestApprovalStep?.approver?.fullName && (
+                    <span className="font-normal text-gray-500">
+                      bởi {latestApprovalStep.approver.fullName}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-3 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                  {latestReason || (request.status === 'REJECTED' ? 'Chưa có lý do từ chối được ghi nhận.' : 'Không có ghi chú phê duyệt.')}
+                </p>
+                {latestApprovalStep?.actedAt && (
+                  <p className="mt-2 text-xs text-gray-400">{formatViDateTime(latestApprovalStep.actedAt)}</p>
+                )}
+              </div>
+            )}
+
             {request.status === 'PENDING' && isApprover && (
               <>
                 <div className="mt-2 mb-4 flex items-center gap-2 border border-gray-200 bg-white rounded-full px-4 py-2 shadow-sm">
@@ -217,9 +294,9 @@ export default function BookingDetail() {
                       </p>
                     </div>
                   </div>
-                  {request.status === 'APPROVED' ? (
+                  {approver.status === 'APPROVED' ? (
                     <div className="w-3 h-3 rounded-full bg-green-500 shrink-0 mt-2 border-2 border-white shadow-sm" title="Đã duyệt"></div>
-                  ) : request.status === 'REJECTED' ? (
+                  ) : approver.status === 'REJECTED' ? (
                     <div className="w-3 h-3 rounded-full bg-red-500 shrink-0 mt-2 border-2 border-white shadow-sm" title="Đã từ chối"></div>
                   ) : (
                     <div className="w-3 h-3 rounded-full border-2 border-green-400 shrink-0 mt-2" title="Chờ duyệt"></div>
@@ -232,8 +309,21 @@ export default function BookingDetail() {
                   onClick={() => setShowAllApprovers(!showAllApprovers)}
                   className="w-full text-xs text-blue-600 font-medium py-1.5 hover:bg-blue-50 rounded transition-colors text-center mt-2 border border-dashed border-blue-200"
                 >
-                  {showAllApprovers ? 'Thu gọn' : `Xem thêm ${approvers.length - 2} người`}
+                  {showAllApprovers ? 'Thu gọn' : `Xem thêm ${approvers.length - 2} lần xử lý`}
                 </button>
+              )}
+
+              {approvalSteps.length === 0 && (
+                <div className="bg-white p-3 border border-gray-100 rounded shadow-sm">
+                  <p className="text-sm font-semibold text-gray-900">
+                    {request.status === 'PENDING' ? 'Chưa có người duyệt' : 'Chưa có lịch sử duyệt'}
+                  </p>
+                  <p className="mt-1 text-[11px] text-gray-500 leading-tight">
+                    {request.status === 'PENDING'
+                      ? 'Yêu cầu đang chờ ADMIN hoặc MANAGER xử lý.'
+                      : 'Booking này có thể là dữ liệu cũ trước khi lưu lịch sử duyệt.'}
+                  </p>
+                </div>
               )}
             </div>
           </div>
@@ -247,18 +337,7 @@ export default function BookingDetail() {
               </div>
               <div>
                 <p className="text-[11px] text-gray-500 mb-1 flex items-center gap-1">Người quản lý</p>
-                {approvers.length > 0 && (
-                <div className="flex items-center gap-2">
-                  {approvers[0].avatarUrl ? (
-                    <img src={approvers[0].avatarUrl} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" referrerPolicy="no-referrer" />
-                  ) : (
-                    <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center text-xs text-green-600 font-bold">
-                      {approvers[0].fullName?.charAt(0)}
-                    </div>
-                  )}
-                  <p className="text-sm text-gray-900">{approvers[0].fullName}</p>
-                </div>
-                )}
+                <p className="text-sm text-gray-500">Chưa cấu hình</p>
               </div>
 
             </div>

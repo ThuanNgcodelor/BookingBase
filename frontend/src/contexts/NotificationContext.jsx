@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import Cookies from 'js-cookie';
 import toast from 'react-hot-toast';
 import { Bell } from 'lucide-react';
 import { notificationApi } from '../api/notificationApi';
-import { NotificationContext } from './NotificationContextCore';
+import { NotificationListContext, NotificationUnreadContext } from './NotificationContextCore';
 import { syncAppBadge } from '../utils/appBadge';
 import { normalizeNotification, normalizeNotificationList } from '../utils/notification';
 
@@ -20,6 +20,7 @@ export function NotificationProvider({ children }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const clientRef = useRef(null);
+  const subscriptionRef = useRef(null);
 
   const loadNotifications = useCallback(async (page = 0, size = 10, unreadOnly = false) => {
     setLoading(true);
@@ -94,8 +95,13 @@ export function NotificationProvider({ children }) {
       heartbeatOutgoing: 10000,
       debug: () => {},
       onConnect: () => {
-        client.subscribe('/user/queue/notifications', (message) => {
-          upsertRealtimeNotification(JSON.parse(message.body));
+        subscriptionRef.current?.unsubscribe();
+        subscriptionRef.current = client.subscribe('/user/queue/notifications', (message) => {
+          try {
+            upsertRealtimeNotification(JSON.parse(message.body));
+          } catch {
+            refreshUnreadCount();
+          }
         });
       },
       onStompError: () => {
@@ -110,6 +116,8 @@ export function NotificationProvider({ children }) {
     client.activate();
 
     return () => {
+      subscriptionRef.current?.unsubscribe();
+      subscriptionRef.current = null;
       clientRef.current = null;
       client.deactivate();
     };
@@ -138,18 +146,35 @@ export function NotificationProvider({ children }) {
     setUnreadCount(0);
   }, []);
 
+  const listContextValue = useMemo(() => ({
+    notifications,
+    loading,
+    error,
+    loadNotifications,
+    markAsRead,
+    markAllAsRead,
+  }), [
+    notifications,
+    loading,
+    error,
+    loadNotifications,
+    markAsRead,
+    markAllAsRead,
+  ]);
+
+  const unreadContextValue = useMemo(() => ({
+    unreadCount,
+    refreshUnreadCount,
+  }), [
+    unreadCount,
+    refreshUnreadCount,
+  ]);
+
   return (
-    <NotificationContext.Provider value={{
-      notifications,
-      unreadCount,
-      loading,
-      error,
-      loadNotifications,
-      refreshUnreadCount,
-      markAsRead,
-      markAllAsRead,
-    }}>
-      {children}
-    </NotificationContext.Provider>
+    <NotificationUnreadContext.Provider value={unreadContextValue}>
+      <NotificationListContext.Provider value={listContextValue}>
+        {children}
+      </NotificationListContext.Provider>
+    </NotificationUnreadContext.Provider>
   );
 }

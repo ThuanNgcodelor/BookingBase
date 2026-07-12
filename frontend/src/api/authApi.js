@@ -10,7 +10,7 @@ const COOKIE_OPTS = { expires: 7, sameSite: 'Strict' };
 export const authApi = {
   setAuthData: (data) => {
     const { accessToken, refreshToken, user } = data;
-    Cookies.set('accessToken', accessToken, { ...COOKIE_OPTS, expires: 1/48 });
+    Cookies.set('accessToken', accessToken, { ...COOKIE_OPTS, expires: 1 / 48 });
     Cookies.set('refreshToken', refreshToken, COOKIE_OPTS);
     Cookies.set('user', JSON.stringify(user), COOKIE_OPTS);
   },
@@ -19,15 +19,13 @@ export const authApi = {
     Cookies.set('user', JSON.stringify(user), COOKIE_OPTS);
   },
 
-  // Gọi khi app khởi động: nếu accessToken đã hết hạn nhưng refreshToken còn
-  // thì lấy accessToken mới mà không cần user phải đăng nhập lại
   silentRefresh: async () => {
     const refreshToken = Cookies.get('refreshToken');
     if (!refreshToken) return false;
     try {
       const res = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
       const { accessToken, refreshToken: newRefreshToken, user } = res.data.data;
-      Cookies.set('accessToken', accessToken, { ...COOKIE_OPTS, expires: 1/48 });
+      Cookies.set('accessToken', accessToken, { ...COOKIE_OPTS, expires: 1 / 48 });
       Cookies.set('refreshToken', newRefreshToken, COOKIE_OPTS);
       Cookies.set('user', JSON.stringify(user), COOKIE_OPTS);
       return true;

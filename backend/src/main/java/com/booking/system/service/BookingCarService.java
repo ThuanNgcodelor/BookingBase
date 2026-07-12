@@ -29,7 +29,7 @@ public class BookingCarService {
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
-    public BookingCar createBooking(BookingCarRequest request) {
+    public BookingCar createBooking(BookingCarRequest request, User requesterPrincipal) {
         if (request.getStartTime().isAfter(request.getEndTime()) || request.getStartTime().isEqual(request.getEndTime())) {
             throw new RuntimeException("Thời gian bắt đầu phải trước thời gian kết thúc.");
         }
@@ -37,7 +37,7 @@ public class BookingCarService {
         Vehicle vehicle = vehicleRepository.findByIdWithLock(request.getVehicleId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy xe"));
 
-        User requester = userRepository.findById(request.getRequesterId())
+        User requester = userRepository.findById(requirePrincipalId(requesterPrincipal))
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người đặt"));
 
         long overlaps = bookingCarRepository.countOverlappingBookings(
@@ -154,5 +154,12 @@ public class BookingCarService {
                     null
             ));
         }
+    }
+
+    private String requirePrincipalId(User principal) {
+        if (principal == null || principal.getId() == null || principal.getId().isBlank()) {
+            throw new RuntimeException("ChÆ°a Ä‘Äƒng nháº­p");
+        }
+        return principal.getId();
     }
 }

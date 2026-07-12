@@ -10,7 +10,6 @@ export const baseApi = axios.create({
   },
 });
 
-// Interceptor đính kèm Access Token vào mọi request
 baseApi.interceptors.request.use(
   (config) => {
     const token = Cookies.get('accessToken');
@@ -46,7 +45,7 @@ baseApi.interceptors.response.use(
         const { accessToken, refreshToken: newRefreshToken } = res.data.data;
 
         // Lưu lại token mới
-        Cookies.set('accessToken', accessToken, { expires: 1/3 }); // 8 tiếng
+        Cookies.set('accessToken', accessToken, { expires: 1 / 3 }); // 8 tiếng
         Cookies.set('refreshToken', newRefreshToken, { expires: 7 });
 
         // Gắn token mới vào request cũ và gọi lại

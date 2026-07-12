@@ -73,7 +73,7 @@ class BookingRoomServiceTest {
         });
         when(userRepository.findByRole(RoleEnum.ADMIN)).thenReturn(List.of(admin));
 
-        bookingRoomService.createBooking(request);
+        bookingRoomService.createBooking(request, requester);
 
         ArgumentCaptor<NotificationEvent> captor = ArgumentCaptor.forClass(NotificationEvent.class);
         verify(eventPublisher, org.mockito.Mockito.times(2)).publishEvent(captor.capture());
@@ -84,6 +84,38 @@ class BookingRoomServiceTest {
                     assertThat(event.type()).isEqualTo(NotificationType.BOOKING_PENDING_APPROVAL);
                     assertThat(event.targetUrl()).isEqualTo("/admin/approvals");
                 });
+    }
+
+    @Test
+    void createBookingIgnoresRequesterIdFromRequestBody() {
+        User requester = user("user-1", "NhÃ¢n viÃªn", RoleEnum.EMPLOYEE);
+        User spoofedRequester = user("user-2", "User khÃ¡c", RoleEnum.EMPLOYEE);
+        Room room = new Room();
+        room.setId("room-1");
+        room.setName("PhÃ²ng há»p A");
+        room.setStatus(RoomStatus.ACTIVE);
+
+        BookingRoomRequest request = new BookingRoomRequest();
+        request.setRequesterId(spoofedRequester.getId());
+        request.setRoomId(room.getId());
+        request.setTitle("Há»p sprint");
+        request.setStartTime(LocalDateTime.now().plusHours(1));
+        request.setEndTime(LocalDateTime.now().plusHours(2));
+        request.setAttendeeCount(6);
+
+        when(roomRepository.findByIdWithLock(room.getId())).thenReturn(Optional.of(room));
+        when(userRepository.findById(requester.getId())).thenReturn(Optional.of(requester));
+        when(bookingRoomRepository.countOverlappingBookings(room.getId(), request.getStartTime(), request.getEndTime())).thenReturn(0L);
+        when(bookingRoomRepository.save(any(BookingRoom.class))).thenAnswer(invocation -> {
+            BookingRoom booking = invocation.getArgument(0);
+            booking.setId("booking-room-1");
+            return booking;
+        });
+        when(userRepository.findByRole(RoleEnum.ADMIN)).thenReturn(List.of());
+
+        BookingRoom saved = bookingRoomService.createBooking(request, requester);
+
+        assertThat(saved.getRequester().getId()).isEqualTo(requester.getId());
     }
 
     private User user(String id, String fullName, RoleEnum role) {

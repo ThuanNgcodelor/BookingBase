@@ -25,6 +25,12 @@ public class PushService {
     @Value("${app.webpush.private-key:}")
     private String privateKey;
 
+    @Value("${app.webpush.retry.max-attempts:3}")
+    private int maxAttempts;
+
+    @Value("${app.webpush.retry.backoff-ms:250}")
+    private long retryBackoffMillis;
+
     public String getVapidPublicKey() {
         return publicKey == null ? "" : publicKey;
     }
@@ -35,9 +41,17 @@ public class PushService {
             return;
         }
 
+        String jsonPayload;
         try {
-            String jsonPayload = objectMapper.writeValueAsString(payload);
-            Notification notification = Notification.builder()
+            jsonPayload = objectMapper.writeValueAsString(payload);
+        } catch (Exception ex) {
+            log.error("Failed to serialize Web Push payload for subscription {}", subscription.getId(), ex);
+            return;
+        }
+
+        Notification notification;
+        try {
+            notification = Notification.builder()
                     .endpoint(subscription.getEndpoint())
                     .userPublicKey(subscription.getP256dhKey())
                     .userAuth(subscription.getAuthKey())
@@ -45,25 +59,74 @@ public class PushService {
                     .ttl(24 * 60 * 60)
                     .urgency(Urgency.HIGH)
                     .build();
-
-            var response = webPushClient.send(notification);
-            int statusCode = response.getStatusLine().getStatusCode();
-            if (statusCode >= 200 && statusCode < 300) {
-                pushSubscriptionService.markSendSuccess(subscription.getId());
-                return;
-            }
-            if (statusCode == 404 || statusCode == 410 || statusCode == 403) {
-                pushSubscriptionService.deactivate(subscription.getId());
-                log.info("Push subscription {} deactivated after status {}", subscription.getId(), statusCode);
-                return;
-            }
-            if (statusCode == 413) {
-                log.warn("Push payload too large for subscription {}", subscription.getId());
-                return;
-            }
-            log.warn("Push send returned status {} for subscription {}", statusCode, subscription.getId());
         } catch (Exception ex) {
-            log.error("Failed to send Web Push to subscription {}", subscription.getId(), ex);
+            log.error("Failed to build Web Push notification for subscription {}", subscription.getId(), ex);
+            return;
+        }
+
+        int attempts = Math.max(1, maxAttempts);
+        for (int attempt = 1; attempt <= attempts; attempt++) {
+            try {
+                var response = webPushClient.send(notification);
+                int statusCode = response.getStatusLine().getStatusCode();
+
+                if (handleStatus(subscription, statusCode)) {
+                    return;
+                }
+
+                if (isRetryableStatus(statusCode) && attempt < attempts) {
+                    backoffBeforeRetry(subscription, attempt, attempts, "status " + statusCode);
+                    continue;
+                }
+
+                log.warn("Push send returned status {} for subscription {} after {} attempt(s)",
+                        statusCode, subscription.getId(), attempt);
+                return;
+            } catch (Exception ex) {
+                if (attempt < attempts) {
+                    backoffBeforeRetry(subscription, attempt, attempts, ex.getClass().getSimpleName());
+                    continue;
+                }
+                log.error("Failed to send Web Push to subscription {} after {} attempt(s)",
+                        subscription.getId(), attempt, ex);
+            }
+        }
+    }
+
+    private boolean handleStatus(PushSubscription subscription, int statusCode) {
+        if (statusCode >= 200 && statusCode < 300) {
+            pushSubscriptionService.markSendSuccess(subscription.getId());
+            return true;
+        }
+        if (statusCode == 404 || statusCode == 410 || statusCode == 403) {
+            pushSubscriptionService.deactivate(subscription.getId());
+            log.info("Push subscription {} deactivated after status {}", subscription.getId(), statusCode);
+            return true;
+        }
+        if (statusCode == 413) {
+            log.warn("Push payload too large for subscription {}", subscription.getId());
+            return true;
+        }
+
+        return false;
+    }
+
+    private boolean isRetryableStatus(int statusCode) {
+        return statusCode == 408 || statusCode == 429 || statusCode >= 500;
+    }
+
+    private void backoffBeforeRetry(PushSubscription subscription, int attempt, int attempts, String reason) {
+        log.warn("Retrying Web Push for subscription {} after {} (attempt {}/{})",
+                subscription.getId(), reason, attempt + 1, attempts);
+
+        if (retryBackoffMillis <= 0) {
+            return;
+        }
+
+        try {
+            Thread.sleep(retryBackoffMillis);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
         }
     }
 

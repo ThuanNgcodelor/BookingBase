@@ -9,7 +9,6 @@ import java.time.LocalDateTime;
 @Data
 public class BookingCarRequest {
 
-    @NotBlank(message = "ID người đặt không được để trống")
     private String requesterId;
 
     @NotBlank(message = "ID xe không được để trống")

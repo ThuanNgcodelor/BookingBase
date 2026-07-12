@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { ChevronLeft, ChevronRight, Search, Filter, Truck, Building2 } from 'lucide-react';
 import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays } from 'date-fns';
 import { Button } from '../ui/Button';
@@ -11,6 +11,8 @@ const CustomToolbar = ({
   resources,
   selectedResource,
   onResourceChange,
+  selectedStatus,
+  onStatusChange,
   resourceType,
   onCreateClick
 }) => {
@@ -67,10 +69,14 @@ const CustomToolbar = ({
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Filter className="w-4 h-4 text-gray-400" />
             </div>
-            <select className="w-full sm:w-auto pl-9 pr-8 py-1.5 border border-gray-200 rounded text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none">
-              <option>Trạng thái: Tất cả</option>
-              <option>Đã duyệt</option>
-              <option>Chờ duyệt</option>
+            <select
+              value={selectedStatus}
+              onChange={(e) => onStatusChange(e.target.value)}
+              className="w-full sm:w-auto pl-9 pr-8 py-1.5 border border-gray-200 rounded text-sm text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none"
+            >
+              <option value="">Trạng thái: Tất cả</option>
+              <option value="APPROVED">Đã duyệt</option>
+              <option value="PENDING">Chờ duyệt</option>
             </select>
           </div>
 
@@ -136,4 +142,4 @@ const CustomToolbar = ({
   );
 };
 
-export default CustomToolbar;
+export default memo(CustomToolbar);

@@ -52,6 +52,7 @@ const serializeSubscription = (subscription) => {
 };
 
 export function usePushNotifications({ autoRegister = false } = {}) {
+  const [initialized, setInitialized] = useState(false);
   const [supported, setSupported] = useState(false);
   const [permission, setPermission] = useState(getPermission());
   const [subscribed, setSubscribed] = useState(false);
@@ -68,6 +69,7 @@ export function usePushNotifications({ autoRegister = false } = {}) {
 
     if (!canUsePush) {
       setSubscribed(false);
+      setInitialized(true);
       return;
     }
 
@@ -77,6 +79,8 @@ export function usePushNotifications({ autoRegister = false } = {}) {
       setSubscribed(Boolean(subscription));
     } catch {
       setSubscribed(false);
+    } finally {
+      setInitialized(true);
     }
   }, []);
 
@@ -187,6 +191,26 @@ export function usePushNotifications({ autoRegister = false } = {}) {
   }, [refreshState]);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return undefined;
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState !== 'hidden') {
+        refreshState();
+      }
+    };
+
+    window.addEventListener('focus', refreshWhenVisible);
+    window.addEventListener('pageshow', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
+    return () => {
+      window.removeEventListener('focus', refreshWhenVisible);
+      window.removeEventListener('pageshow', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [refreshState]);
+
+  useEffect(() => {
     if (!autoRegister || autoRegisteredRef.current || needsHomeScreenInstall) return;
     if (!supported || permission !== 'granted' || subscribed) return;
 
@@ -197,6 +221,7 @@ export function usePushNotifications({ autoRegister = false } = {}) {
   }, [autoRegister, ensureSubscription, needsHomeScreenInstall, permission, refreshState, subscribed, supported]);
 
   return {
+    initialized,
     supported,
     permission,
     subscribed,
