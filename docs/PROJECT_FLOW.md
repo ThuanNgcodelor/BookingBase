@@ -1,429 +1,223 @@
-# BookingBase Project Flow
+# Luồng Dự Án BookingBase
 
-Generated: 2026-07-11
+Cập nhật: 2026-07-12
 
-This file describes the actual flow found in the current codebase.
+File này mô tả flow nghiệp vụ hiện tại bằng tiếng Việt. Giữ nguyên thuật ngữ kỹ thuật như `JWT`, `DTO`, `WebSocket`, `Service Worker`, `PWA`, `Redis`, `range-based fetch`.
 
 ## 1. Login, Register, Forgot Password
 
-Email/password login:
-
-```text
-Login.jsx
--> authApi.login(email, password)
--> POST /api/v1/auth/login
--> AuthController.login()
--> AuthService.authenticate()
--> UserRepository.findByEmail()
--> PasswordEncoder.matches()
--> JwtUtils.generateAccessToken()
--> JwtUtils.generateRefreshToken()
--> RedisTemplate.set("refreshToken:{email}")
--> frontend stores tokens and user in cookies
-```
+Login:
+1. Frontend gửi email/password tới `POST /api/v1/auth/login`.
+2. Backend validate user, password và status.
+3. Backend trả access token, refresh token và user info.
+4. Frontend lưu token/user vào cookie.
+5. Protected route kiểm tra token; nếu hết access token nhưng còn refresh token thì gọi silent refresh.
 
 Google login:
-
-```text
-Login.jsx
--> authApi.googleLogin(idToken)
--> POST /api/v1/auth/google
--> AuthController.googleLogin()
--> AuthService.authenticateWithGoogle()
--> GoogleIdTokenVerifier.verify()
--> AuthService.processUserAuth()
--> create/update User
--> issue JWT + refresh token
-```
+1. Frontend lấy Google id token.
+2. Gửi tới `POST /api/v1/auth/google`.
+3. Backend xác minh và trả token.
 
 Register OTP:
-
-```text
-Register.jsx
--> authApi.requestRegisterOtp()
--> POST /api/v1/auth/register/request-otp
--> AuthService.requestRegisterOtp()
--> OtpService.generateAndStoreOtp()
--> OtpMailService.sendRegisterOtp()
-
-Register.jsx
--> authApi.verifyRegisterOtp()
--> POST /api/v1/auth/register/verify
--> AuthService.verifyRegisterOtp()
--> create EMPLOYEE user with encoded password
-```
+1. User gửi email tới `/api/v1/auth/register/request-otp`.
+2. Backend tạo OTP và lưu Redis TTL.
+3. Backend gửi email OTP.
+4. User verify qua `/api/v1/auth/register/verify`.
 
 Forgot password OTP:
+1. User gửi email tới `/api/v1/auth/forgot-password/request-otp`.
+2. Backend gửi OTP nếu email tồn tại.
+3. User reset password qua `/api/v1/auth/forgot-password/reset`.
 
-```text
-ForgotPassword.jsx
--> authApi.requestForgotPasswordOtp()
--> POST /api/v1/auth/forgot-password/request-otp
--> AuthService.requestForgotPasswordOtp()
--> OtpService + OtpMailService
+Quy tắc:
+- Không đổi login/profile flow nếu task không yêu cầu.
+- Token/refresh token phải được xử lý nhất quán.
 
-ForgotPassword.jsx
--> authApi.resetPasswordWithOtp()
--> POST /api/v1/auth/forgot-password/reset
--> AuthService.resetPasswordWithOtp()
--> PasswordEncoder.encode()
--> UserRepository.save()
-```
+## 2. Tạo Room Booking
 
-Status:
-- IMPLEMENTED: email/password, Google login, register OTP, forgot password OTP.
-- OUTDATED DOC/PARTIAL: original design says Google Workspace only; current code also supports email/password/OTP.
+1. User mở `/rooms`.
+2. Frontend load rooms bằng `resourceApi.getRooms`.
+3. Calendar fetch bookings theo visible range.
+4. User chọn slot hoặc bấm create.
+5. Frontend gửi booking request.
+6. Backend lấy requester từ `@AuthenticationPrincipal`.
+7. Backend validate thời gian và resource.
+8. Backend lock room trước overlap check.
+9. Nếu không overlap, tạo booking `PENDING`.
+10. Sau commit, publish notification/email/push cho approver.
 
-## 2. Create Room Booking
+Không được:
+- Tin `requesterId` từ request body.
+- Bỏ validation `startTime < endTime`.
+- Bỏ overlap check.
 
-```text
-CreateRoomBooking.jsx
--> authApi.getUser()
--> payload includes requesterId from cookie user
--> bookingApi.createRoomBooking(payload)
--> POST /api/v1/bookings/rooms
--> BookingRoomController.createBooking()
--> BookingRoomService.createBooking()
--> validate startTime < endTime
--> RoomRepository.findByIdWithLock(roomId)
--> validate room status ACTIVE
--> UserRepository.findById(requesterId)
--> BookingRoomRepository.countOverlappingBookings(roomId, start, end)
--> BookingRoomRepository.save()
--> publish NotificationEvent for requester
--> publish NotificationEvent for each admin
--> transaction commits
--> NotificationEventListener.handle() AFTER_COMMIT + @Async
--> NotificationService.createNotification()
--> NotificationService.pushRealtime()
--> EmailService if event has EmailInstruction
--> PushService for active push subscriptions
--> frontend navigates back to /rooms
-```
+## 3. Tạo Car Booking
 
-Important status:
-- IMPLEMENTED: lock, overlap check, after-commit notification.
-- VERIFIED issue: requester comes from request body, not authenticated principal.
-- VERIFIED issue: controller returns `BookingRoom` entity directly.
+Luồng tương tự room booking:
+1. User mở `/cars`.
+2. Frontend load vehicles.
+3. Calendar fetch bookings theo visible range.
+4. User tạo booking xe.
+5. Backend lấy requester từ principal.
+6. Backend lock vehicle trước overlap check.
+7. Tạo booking `PENDING`.
+8. Dispatch notification/email/push sau commit.
 
-## 3. Create Car Booking
-
-```text
-CreateCarBooking.jsx
--> authApi.getUser()
--> payload includes requesterId and title
--> bookingApi.createCarBooking(payload)
--> POST /api/v1/bookings/cars
--> BookingCarController.createBooking()
--> BookingCarService.createBooking()
--> validate startTime < endTime
--> VehicleRepository.findByIdWithLock(vehicleId)
--> UserRepository.findById(requesterId)
--> BookingCarRepository.countOverlappingBookings(vehicleId, start, end)
--> BookingCarRepository.save()
--> publish NotificationEvent for requester
--> publish NotificationEvent for each admin
--> AFTER_COMMIT notification/email/push
--> frontend navigates back to /cars
-```
-
-Important status:
-- IMPLEMENTED: lock, overlap check, after-commit notification.
-- VERIFIED issue: requester comes from request body, not authenticated principal.
-- VERIFIED issue: frontend sends `title`, but `BookingCarRequest` has no title and `BookingCar` has no title; calendar maps `b.title`, so car event title can be missing.
+Car event title có thể lấy từ title hoặc route `departure - destination`.
 
 ## 4. Overlap Check
 
-Room:
+Overlap logic chuẩn:
 
 ```text
-BookingRoomService.createBooking()
--> RoomRepository.findByIdWithLock(roomId)
--> BookingRoomRepository.countOverlappingBookings()
--> JPQL:
-   room.id = :roomId
-   status in PENDING, APPROVED
-   startTime < :endTime
-   endTime > :startTime
+existing.start < new.end
+AND
+existing.end > new.start
 ```
 
-Car:
+Blocking statuses:
+- `PENDING`
+- `APPROVED`
 
-```text
-BookingCarService.createBooking()
--> VehicleRepository.findByIdWithLock(vehicleId)
--> BookingCarRepository.countOverlappingBookings()
--> JPQL:
-   vehicle.id = :vehicleId
-   status in PENDING, APPROVED
-   startTime < :endTime
-   endTime > :startTime
-```
+Room/vehicle phải được lock trước overlap check nếu chưa có giải pháp tương đương đã chứng minh.
 
-Status:
-- IMPLEMENTED: correct interval intersection logic.
-- IMPLEMENTED: pessimistic lock on resource row.
-- NOT FOUND: composite indexes for booking overlap.
-- NEEDS TEST: concurrent room/car create integration tests with real DB.
+## 5. Approve Hoặc Reject Booking
 
-## 5. Approve Or Reject Booking
+1. Approver mở approval list hoặc booking detail.
+2. Approver approve/reject.
+3. Frontend gửi `reason`; legacy `note` vẫn được backend nhận để backward compatibility.
+4. Backend lấy approver từ `@AuthenticationPrincipal`.
+5. Backend enforce `ADMIN` hoặc `MANAGER`.
+6. Backend ignore `approverId` từ body.
+7. Backend lưu `ApprovalStep` với approver thật và reason.
+8. Booking status chuyển `APPROVED` hoặc `REJECTED`.
+9. Dispatch notification/email/push cho requester sau commit.
 
-Room approve/reject:
-
-```text
-BookingDetail.jsx
--> approvalApi.approveRoom(id, { approverId, note })
--> POST /api/v1/approvals/rooms/{id}/approve
--> ApprovalController.approveRoom()
--> ApprovalService.approveRoom()
--> BookingRoomRepository.findById()
--> UserRepository.findById(request.approverId)
--> booking.status = APPROVED
--> ApprovalStepRepository.save()
--> publish NotificationEvent for requester
--> AFTER_COMMIT notification/email/push
-```
-
-Car approve/reject is the same shape with `BookingCarRepository`.
-
-Important status:
-- VERIFIED issue: controller does not use `@AuthenticationPrincipal`.
-- VERIFIED issue: service trusts `approverId` from request body.
-- VERIFIED issue: no backend role/scope check in approval endpoints.
-- VERIFIED issue: frontend sends `note`, but DTO expects `reason`; reject reason can be lost.
+Reject reason phải hiển thị được ở booking detail.
 
 ## 6. Cancel Booking
 
-Room cancel:
+Luồng cancel cần giữ nguyên các quy tắc bảo mật:
+- Canceller phải lấy từ authenticated principal.
+- Không tin `cancellerId` từ request body.
+- Cần preserve status/cancel reason.
+- Notification sau cancel không được rollback transaction nếu mail/push fail.
 
-```text
-Frontend caller
--> POST /api/v1/bookings/rooms/{id}/cancel
--> BookingRoomController.cancelBooking()
--> BookingRoomService.cancelBooking(id, CancelRequest)
--> BookingRoomRepository.findById()
--> UserRepository.findById(request.cancellerId)
--> set status CANCELLED
--> save
--> notify requester if canceller differs
-```
+Nếu chạm cancel flow, thêm test chống giả mạo user.
 
-Car cancel has the same shape.
+## 7. Load Calendar
 
-Status:
-- VERIFIED issue: canceller comes from request body, not authenticated principal.
-- NEEDS TEST: permissions for requester/admin cancel.
+Frontend calendar:
+1. Tính visible range theo view `month`, `week`, `day`.
+2. Fetch bookings theo `start`, `end`, resource filter và status filter.
+3. Dùng `AbortController` để hủy request cũ.
+4. Dùng request sequence guard để stale response không ghi đè state mới.
+5. Dùng `useMemo` cho event mapping/filter.
+6. Calendar responsive theo resize/orientation.
 
-## 7. Calendar Load
+Màu event:
+- Event quá khứ: màu xám/lịch sử.
+- Pending quá hạn: màu cảnh báo.
+- Approved hiện tại/tương lai: màu chính.
+- Pending tương lai: màu chờ duyệt.
 
-Room:
+Không để notification list update làm Calendar render lại nếu không liên quan.
 
-```text
-RoomBooking.jsx
--> getCalendarRange(date, view)
--> bookingApi.getRoomBookings({ start, end })
--> GET /api/v1/bookings/rooms?start=...&end=...
--> BookingRoomController.getAllBookings(start, end, roomId, status)
--> BookingRoomService.getBookingsByDateRange()
--> BookingRoomRepository.findByDateRange()
--> frontend maps booking to calendar event
--> frontend filters rejected/cancelled and selectedRoom
--> react-big-calendar renders
-```
+## 8. Admin Approval List Và Booking Detail
 
-Car:
-
-```text
-CarBooking.jsx
--> getCalendarRange(date, view)
--> bookingApi.getCarBookings({ start, end })
--> GET /api/v1/bookings/cars?start=...&end=...
--> BookingCarController.getAllBookings(start, end, vehicleId, status)
--> BookingCarService.getBookingsByDateRange()
--> BookingCarRepository.findByDateRange()
--> frontend maps booking to calendar event
--> frontend filters rejected/cancelled and selectedCar
-```
-
-Status:
-- IMPLEMENTED: visible range fetch.
-- IMPLEMENTED: backward compatibility when no `start/end`.
-- PARTIAL: selected resource is filtered client-side, not passed to API.
-- NOT FOUND: AbortController/stale response guard.
-- NOT FOUND: `useMemo` for `filteredEvents`.
-
-## 8. Admin Approval List And Booking Detail
-
-Admin approvals:
-
-```text
-AdminApprovals.jsx
--> Promise.all([
-     bookingApi.getRoomBookings(),
-     bookingApi.getCarBookings()
-   ])
--> GET room/cars without start/end
--> backend getAllBookings()
--> repository.findAll()
--> frontend filters status PENDING
-```
+Admin approval list:
+- Hiển thị booking pending/approved/rejected theo API hiện tại.
+- Không dùng dữ liệu mẫu cho người duyệt.
 
 Booking detail:
-
-```text
-BookingDetail.jsx
--> Promise.all([
-     bookingApi.getRoomBookings(),
-     bookingApi.getCarBookings(),
-     userApi.getApprovers()
-   ])
--> find requested booking in client memory
-```
-
-Status:
-- VERIFIED issue: still uses all-bookings endpoints; this does not scale.
-- Recommended: add detail endpoints and pending-approval endpoints with pagination.
+- Load booking detail.
+- Load approval steps.
+- Hiển thị approver thật, role/department nếu có.
+- Hiển thị reject/approve reason.
+- Cho phép approve/reject nếu user là `ADMIN` hoặc `MANAGER` và booking còn xử lý được.
 
 ## 9. Notification Database
 
-```text
-Business service publishes NotificationEvent
--> transaction commits
--> NotificationEventListener.handle() AFTER_COMMIT
--> NotificationService.createNotification()
--> duplicate check by recipient/type/sourceType/sourceId
--> NotificationRepository.save()
--> return NotificationResponse
-```
+Database notification là `Source of Truth`.
 
-Status:
-- IMPLEMENTED: database notification is source of truth.
-- IMPLEMENTED: `Notification` entity has indexes and unique constraint.
-- PARTIAL: duplicate race is constrained by DB, but service does not explicitly handle unique-key exception as idempotent success.
+Notification nên có:
+- recipient.
+- sender.
+- type.
+- title/message.
+- targetUrl.
+- sourceType/sourceId.
+- read state.
 
-## 10. WebSocket Realtime
+Idempotency:
+- Tránh duplicate notification theo source type/source id/event.
+- Không rollback business transaction vì notification side effect fail.
 
-Backend:
+## 10. Realtime Qua WebSocket
 
-```text
-WebSocketConfig.registerStompEndpoints()
--> /ws endpoint with SockJS
-WebSocketConfig.configureClientInboundChannel()
--> on STOMP CONNECT validate Authorization Bearer token
--> set Principal name to user id
-NotificationService.pushRealtime()
--> convertAndSendToUser(recipientId, "/queue/notifications", payload)
-```
+1. Frontend tạo STOMP client qua SockJS.
+2. CONNECT gửi JWT trong header.
+3. Backend WebSocket/STOMP phải validate JWT.
+4. Client subscribe `/user/queue/notifications`.
+5. Khi nhận realtime notification:
+   - upsert notification list.
+   - tăng unread count nếu chưa đọc.
+   - hiện toast.
+6. Nếu parse lỗi hoặc STOMP error, refresh unread count.
 
-Frontend:
-
-```text
-NotificationContext.jsx
--> new STOMP Client with SockJS(getWsUrl())
--> connectHeaders Authorization Bearer token
--> subscribe /user/queue/notifications
--> upsertRealtimeNotification()
--> toast + unread count + app badge
-```
-
-Status:
-- IMPLEMENTED: STOMP CONNECT authentication.
-- PARTIAL: provider value is not memoized, so realtime updates can re-render all context consumers.
+Provider value đã memo hóa; subscription có cleanup.
 
 ## 11. Email
 
-```text
-NotificationEvent has EmailInstruction
--> NotificationEventListener.sendEmailIfConfigured()
--> lookup recipient user
--> EmailService async method
--> JavaMailSender sends HTML email
--> failures are logged and not rethrown
-```
+Email là kênh độc lập/fallback.
 
-Status:
-- IMPLEMENTED: async email after commit.
-- VERIFIED issue: email links hard-code `https://cfcbooking.io.vn`.
-- NOT FOUND: retry/backoff or email log table.
+Rule:
+- Email gửi async.
+- Email fail chỉ log, không rollback booking.
+- Không đưa email vào booking transaction.
+- Link email cần đúng domain/environment.
+- Không log SMTP password hoặc secret.
+
+Rủi ro đã biết:
+- Cần verify frontend URL config cho email trước production email rollout.
 
 ## 12. Web Push
 
 Subscribe:
-
-```text
-DashboardLayout
--> usePushNotifications({ autoRegister: true })
--> pushApi.getVapidPublicKey()
--> navigator.serviceWorker.ready
--> pushManager.getSubscription()
--> unsubscribe if VAPID key mismatch
--> pushManager.subscribe()
--> pushApi.subscribe()
--> POST /api/v1/push/subscriptions
--> PushSubscriptionController.subscribe()
--> PushSubscriptionService.subscribe()
--> save/update PushSubscription by endpoint
-```
+1. Frontend lấy VAPID public key.
+2. Browser tạo PushSubscription.
+3. Frontend gửi endpoint, p256dh, auth, device info lên backend.
 
 Send:
+1. Backend tạo payload.
+2. Backend gửi Web Push tới active subscriptions.
+3. Retry giới hạn cho network/408/429/5xx.
+4. 403/404/410 deactivate subscription và không retry.
 
-```text
-NotificationEventListener.sendPushIfSubscribed()
--> PushSubscriptionService.findActiveByUser()
--> for each subscription: PushService.sendPush()
--> webPushClient.send()
--> 2xx marks success
--> 403/404/410 deactivate subscription
--> 413 logs payload too large
--> other errors log only
-```
-
-Click:
-
-```text
-Service worker notificationclick
--> focus existing client and post NAVIGATE
--> or clients.openWindow(targetUrl)
--> DashboardLayout service-worker message listener navigates protected app
-```
-
-Status:
-- IMPLEMENTED: subscription lifecycle, invalid subscription cleanup, notification click.
-- PARTIAL: NAVIGATE listener is in protected layout, not global app entry.
-- NOT FOUND: retry/backoff for network/5xx.
-- NOT FOUND: bounded executor dedicated to notification/email/push.
+PWA:
+- Required notification gate chỉ áp dụng khi app chạy dạng installed PWA trên Android/iOS.
+- Web không thể tự bật permission nếu user đã block; user phải bật lại trong Settings.
 
 ## 13. Scheduler Reminder/Completed
 
-Status:
-- NOT FOUND: no `@EnableScheduling` and no `@Scheduled` methods were found.
-- Design docs describe reminders/completed transitions, but current code does not implement scheduler flow.
+Chưa phải trọng tâm hiện tại. Nếu thêm scheduler:
+- Không spam notification/email.
+- Phải idempotent.
+- Phải có sourceType/sourceId.
+- Phải test timezone.
 
-## 14. Docker And Deploy
+## 14. Docker Và Deploy
 
-Current compose:
+Production hiện tại:
+- `build-prod.bat`: build frontend + package backend jar.
+- `run.bat`: start `db`, `redis`, Spring Boot jar, Cloudflare Tunnel.
+- `stop-prod.bat`: stop production.
 
-```text
-docker-compose.yml
--> db: mysql:8.0, named volume db_data
--> redis: redis:7-alpine, named volume redis_data
--> adminer
-```
+Docker:
+- MySQL/Redis được constrain để giảm RAM.
+- Adminer không start mặc định trong production script.
 
-Current tunnel:
-
-```text
-cloudflared-config.yml
--> api.cfcbooking.io.vn -> localhost:8080
--> cfcbooking.io.vn -> localhost:4173
--> www.cfcbooking.io.vn -> localhost:4173
-```
-
-Status:
-- PARTIAL: DB and Redis volumes exist.
-- NOT FOUND: backend/frontend container services.
-- NOT FOUND: healthchecks.
-- NOT FOUND: resource limits.
-- NOT FOUND: `.env.example`.
-- NOT FOUND: root `Dockerfile` and `nginx.conf`.
-- VERIFIED issue: cloudflared credentials path is an absolute local Windows path.
+Cloudflare:
+- Web/API đều trỏ backend `8080`.
+- Spring Boot serve SPA static files.
+- Deep link refresh không 404 nhờ `SpaForwardController`.

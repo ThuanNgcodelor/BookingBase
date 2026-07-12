@@ -1,102 +1,117 @@
-# BookingBase AI Project Context
+# Ngữ Cảnh AI Cho BookingBase
 
-Generated: 2026-07-11
+Cập nhật: 2026-07-12
 
-This document is context for future AI agents. Code and configuration in the repository are the source of truth. Older design documents can describe intended behavior that is not implemented yet.
+File này là context tiếng Việt cho AI agent. Code và config hiện tại luôn là `Source of Truth`. Giữ nguyên thuật ngữ kỹ thuật như `Frontend`, `Backend`, `JWT`, `DTO`, `PWA`, `Service Worker`, `WebSocket`, `STOMP`, `runtime cache`.
 
-## Source Of Truth Order
+## Source Of Truth
 
-1. Current code and config in this repository
-2. Current database schema or migration files
-3. `docs/OPTIMIZATION_PHASES.md`
-4. `docs/rules.md`
-5. `docs/Thiet-ke-He-thong-Booking-Noi-bo.md`
+1. Code và config hiện tại trong repository.
+2. Schema/migration hiện tại nếu có.
+3. `docs/CURRENT_WORK_STATUS.md`.
+4. `docs/PROJECT_FLOW.md`.
+5. `docs/PERFORMANCE_AUDIT.md`.
+6. `docs/OPTIMIZATION_EXECUTION_PLAN.md`.
 
-## System Goal
+Docs chỉ là tham khảo. Nếu docs khác code, ưu tiên code.
 
-BookingBase is an internal booking system for meeting rooms and company cars. The actual repo implements authentication, booking, approval, dashboard, notification, WebSocket realtime, email, Web Push/PWA, profile update approval, and basic resource management.
+## Mục Tiêu Hệ Thống
 
-## Actual Tech Stack
+BookingBase là hệ thống booking nội bộ cho phòng họp và xe công ty. Repo hiện triển khai:
+
+- Authentication bằng email/password, Google login, OTP register/forgot password.
+- Booking phòng họp và xe.
+- Approval workflow.
+- Dashboard.
+- Notification database.
+- WebSocket realtime.
+- Email.
+- Web Push/PWA.
+- Profile update approval.
+- Resource management cơ bản.
+
+## Tech Stack Hiện Tại
 
 Frontend:
-- React 19 + Vite 8
-- React Router 7
-- Axios
-- `react-big-calendar`
-- `date-fns`
-- STOMP over SockJS
-- `vite-plugin-pwa` with custom service worker at `frontend/src/sw.js`
+- React 19 + Vite 8.
+- React Router 7.
+- Axios.
+- `react-big-calendar`.
+- `date-fns`.
+- STOMP over SockJS.
+- `vite-plugin-pwa` với custom Service Worker tại `frontend/src/sw.js`.
 
 Backend:
-- Spring Boot 4.0.0, Java 21
-- Spring Security + JWT
-- Spring Data JPA
-- MySQL
-- Redis for refresh-token storage
-- Java Mail
-- WebSocket/STOMP
-- Web Push/VAPID
-- Async notification/email/push event handling
+- Spring Boot 4.0.0, Java 21 theo `pom.xml`.
+- Spring Security + JWT.
+- Spring Data JPA.
+- MySQL.
+- Redis cho refresh token và OTP.
+- Java Mail.
+- WebSocket/STOMP.
+- Web Push/VAPID.
+- Async notification/email/push event handling.
 
 Infra/config:
-- `docker-compose.yml` currently defines MySQL, Redis, and Adminer only.
-- `cloudflared-config.yml` maps `api.cfcbooking.io.vn` to backend port 8080 and frontend domains to preview port 4173.
-- No root `Dockerfile`, `nginx.conf`, or `.env.example` was found in the current repository scan.
+- `docker-compose.yml`: MySQL + Redis, Adminer không được start bởi `run.bat`.
+- Production direction: frontend `dist` được embed vào Spring Boot jar.
+- Cloudflare Tunnel trỏ web/API về backend port `8080`.
+- `run.bat` chỉ start production artifact; `build-prod.bat` mới build artifact.
 
-## Folder Map
+## Sơ Đồ Thư Mục
 
 Backend:
-- `backend/src/main/java/com/booking/system/controller`: REST controllers.
-- `backend/src/main/java/com/booking/system/service`: business services.
-- `backend/src/main/java/com/booking/system/repository`: JPA repositories.
-- `backend/src/main/java/com/booking/system/entity`: JPA entities.
-- `backend/src/main/java/com/booking/system/dto`: request/response DTOs.
-- `backend/src/main/java/com/booking/system/event`: notification event and listener.
-- `backend/src/main/java/com/booking/system/config`: security, CORS, WebSocket, Web Push, seed data.
-- `backend/src/main/resources/application.yml`: runtime config.
-- `backend/src/test/java/com/booking/system`: current tests.
+- `controller`: REST controllers và SPA fallback controller.
+- `service`: business services.
+- `repository`: JPA repositories.
+- `entity`: JPA entities.
+- `dto`: request/response DTOs.
+- `event`: notification event và listener.
+- `config`: Security, CORS, WebSocket, Web Push, async executor, seed data.
+- `src/main/resources/application.yml`: config mặc định.
+- `src/main/resources/application-prod.yml`: config profile `prod`.
+- `src/test/java`: unit/service tests.
 
 Frontend:
-- `frontend/src/App.jsx`: routes and route guards.
-- `frontend/src/main.jsx`: app entry and PWA registration.
-- `frontend/src/api`: Axios clients.
-- `frontend/src/pages`: app screens.
-- `frontend/src/layouts/DashboardLayout.jsx`: app shell, notification provider, service-worker message listener.
-- `frontend/src/contexts/NotificationContext.jsx`: notification state and STOMP client.
-- `frontend/src/hooks/usePushNotifications.js`: Web Push subscribe/unsubscribe.
-- `frontend/src/sw.js`: custom service worker for push and notification click.
-- `frontend/vite.config.js`: Vite and PWA manifest.
+- `App.jsx`: routes và route guards.
+- `main.jsx`: app entry và PWA registration.
+- `api`: Axios clients.
+- `pages`: screens.
+- `layouts/DashboardLayout.jsx`: app shell, notification UI, PWA gate.
+- `contexts/NotificationContext.jsx`: notification state và STOMP client.
+- `hooks/usePushNotifications.js`: Web Push subscribe/unsubscribe.
+- `sw.js`: custom Service Worker cho push, notification click, offline fallback.
+- `vite.config.js`: Vite và PWA manifest/config.
 
-## Roles And Permission Model
+## Roles Và Permission Model
 
-Actual implementation:
-- `RoleEnum`: `ADMIN`, `MANAGER`, `EMPLOYEE`.
-- `User` has a single `role` field, not multiple roles.
-- Some frontend routes hide admin/approver screens by cookie user role.
-- Some backend controllers use manual `requireAdmin`.
+Role hiện tại:
+- `ADMIN`
+- `MANAGER`
+- `EMPLOYEE`
 
-Important current gaps:
-- Booking create uses `requesterId` from request body.
-- Approval uses `approverId` from request body.
-- Cancel uses `cancellerId` from request body.
-- Dashboard `/admin` and `/client/{userId}` do not use authenticated principal in the controller.
+Quy tắc bảo mật cần giữ:
+- Booking requester lấy từ `@AuthenticationPrincipal`.
+- Approval approver lấy từ `@AuthenticationPrincipal`.
+- Cancel canceller phải lấy từ `@AuthenticationPrincipal` khi chạm luồng cancel.
+- Không tin `requesterId`, `approverId`, `cancellerId` từ request body.
+- Approve/reject chỉ cho `ADMIN` hoặc `MANAGER`.
+- Protected API phải trả 401 nếu không có token.
+- Admin API phải trả 403 nếu user không đủ quyền.
 
-Design-doc mismatch:
-- Multi-role and scope-based permission are not implemented as described in the design document. Treat that as OUTDATED DOC/PARTIAL until code changes.
-
-## Main Entities
+## Entities Chính
 
 - `User`: email, fullName, password, avatarUrl, jobPosition, role, status, department.
 - `Room`: name, location, capacity, equipment, imageUrl, status.
-- `Vehicle`: licensePlate, vehicleType, seatCount, status. It reuses `RoomStatus`.
+- `Vehicle`: licensePlate, vehicleType, seatCount, status.
 - `BookingRoom`: room, requester, title, startTime, endTime, attendeeCount, note, status, cancel info.
 - `BookingCar`: vehicle, requester, departure, destination, startTime, endTime, note, status, cancel info.
-- `ApprovalStep`: stores approval action for room or car booking.
+- `ApprovalStep`: approval action cho room hoặc car booking.
 - `Notification`: recipient, sender, type, title, message/description, targetUrl, sourceType, sourceId, priority, read state.
 - `PushSubscription`: user, endpoint, p256dh/auth keys, device info, active state.
-- `ProfileUpdateRequest`: profile change workflow.
+- `ProfileUpdateRequest`: workflow duyệt thay đổi profile.
 
-## Main API Map
+## Sơ Đồ API Chính
 
 Auth:
 - `POST /api/v1/auth/login`
@@ -116,171 +131,116 @@ Booking:
 - `GET /api/v1/bookings/cars`
 - `POST /api/v1/bookings/cars/{id}/cancel`
 
-Calendar range support:
-- `GET /api/v1/bookings/rooms?start=yyyy-MM-ddTHH:mm:ss&end=yyyy-MM-ddTHH:mm:ss&roomId=&status=`
-- `GET /api/v1/bookings/cars?start=yyyy-MM-ddTHH:mm:ss&end=yyyy-MM-ddTHH:mm:ss&vehicleId=&status=`
-
 Approval:
 - `POST /api/v1/approvals/rooms/{id}/approve`
 - `POST /api/v1/approvals/rooms/{id}/reject`
 - `POST /api/v1/approvals/cars/{id}/approve`
 - `POST /api/v1/approvals/cars/{id}/reject`
+- `GET /api/v1/approvals/rooms/{id}/steps`
+- `GET /api/v1/approvals/cars/{id}/steps`
 
-Notification and push:
+Notification/Push:
 - `GET /api/v1/notifications`
 - `GET /api/v1/notifications/unread-count`
-- `PATCH /api/v1/notifications/{id}/read`
-- `PATCH /api/v1/notifications/read-all`
+- `POST /api/v1/notifications/{id}/read`
+- `POST /api/v1/notifications/read-all`
 - `GET /api/v1/push/vapid-public-key`
 - `POST /api/v1/push/subscriptions`
 - `DELETE /api/v1/push/subscriptions`
-- `GET /api/v1/push/subscriptions`
 
-Resources and dashboard:
+Resource/User/Profile:
 - `GET /api/v1/resources/rooms`
 - `GET /api/v1/resources/cars`
-- `GET /api/v1/dashboard/admin`
-- `GET /api/v1/dashboard/client/{userId}`
 - `GET /api/v1/users/me`
 - `GET /api/v1/users/approvers`
-- `POST /api/v1/users`
+- `GET /api/v1/profile-requests/...`
 
-## Authentication Current State
+## Trạng Thái Authentication
 
-Actual login options:
-- Email/password.
-- Google ID token login.
-- OTP register and forgot password.
+- Access token và refresh token được lưu bằng cookie phía frontend.
+- Refresh token được lưu Redis theo key dạng `refreshToken:{email}`.
+- OTP register/forgot password dùng Redis TTL.
+- Login flow/profile flow không nên thay đổi nếu task không yêu cầu.
 
-Token behavior:
-- Backend signs JWT with `JwtUtils`.
-- Refresh token is stored in Redis under `refreshToken:{email}`.
-- Frontend stores access token, refresh token, and user JSON in cookies.
-- `baseApi` retries once on 401 by calling `/auth/refresh`.
+## Tóm Tắt Luồng Booking
 
-Risk:
-- `application.yml` contains real-looking default JWT, DB, SMTP, VAPID, and Google client config. Production must use environment variables and remove real fallback secrets.
+Tạo booking:
+1. User chọn resource, thời gian và nhập thông tin.
+2. Frontend gọi room/car booking API.
+3. Backend lấy requester từ authenticated principal.
+4. Backend validate `startTime < endTime`.
+5. Backend lock room/vehicle trước khi overlap check.
+6. Overlap logic: existing start < new end và existing end > new start.
+7. Blocking statuses: `PENDING`, `APPROVED`.
+8. Booking tạo trạng thái `PENDING`.
+9. Sau commit, notification/email/push được dispatch async.
 
-## Booking Flow Summary
+Approval:
+1. Approver mở approval/detail.
+2. Approver approve hoặc reject.
+3. Backend lấy approver từ authenticated principal.
+4. Backend enforce role `ADMIN` hoặc `MANAGER`.
+5. Lưu `ApprovalStep` với `reason`.
+6. Cập nhật booking status.
+7. Dispatch notification/email/push sau commit.
 
-Room booking:
-- `CreateRoomBooking.jsx`
-- `bookingApi.createRoomBooking`
-- `POST /api/v1/bookings/rooms`
-- `BookingRoomController.createBooking`
-- `BookingRoomService.createBooking`
-- `RoomRepository.findByIdWithLock`
-- `BookingRoomRepository.countOverlappingBookings`
-- `BookingRoomRepository.save`
-- `NotificationEvent` published
-- `NotificationEventListener` handles after commit
+## Tóm Tắt Luồng Calendar
 
-Car booking:
-- `CreateCarBooking.jsx`
-- `bookingApi.createCarBooking`
-- `POST /api/v1/bookings/cars`
-- `BookingCarController.createBooking`
-- `BookingCarService.createBooking`
-- `VehicleRepository.findByIdWithLock`
-- `BookingCarRepository.countOverlappingBookings`
-- `BookingCarRepository.save`
-- `NotificationEvent` published
-- `NotificationEventListener` handles after commit
+- Calendar dùng range-based fetch theo month/week/day.
+- Có `AbortController` và request sequence guard để tránh stale response.
+- Mapping/filter event dùng `useMemo`.
+- Khi chọn room/car, API nhận `roomId` hoặc `vehicleId`.
+- Past events vẫn hiển thị như lịch sử và có màu riêng.
+- Calendar không nên phụ thuộc notification list để tránh re-render không liên quan.
 
-Do not break:
-- `PENDING` and `APPROVED` are the blocking statuses for overlap checks.
-- Resource locks are used to reduce race conditions.
-- Notifications are published after commit.
+## Tóm Tắt Luồng Notification
 
-## Calendar Flow Summary
+- Database notification là `Source of Truth`.
+- WebSocket chỉ dùng realtime delivery.
+- Email là kênh độc lập/fallback.
+- Web Push gửi cho active subscriptions.
+- Push failure không được rollback booking.
+- Permanent push failures 403/404/410 không retry và deactivate subscription.
+- Notification context đã tách unread count khỏi notification list.
 
-Room and car calendar pages:
-- Compute visible range from month/week/day.
-- Call `bookingApi.getRoomBookings({start,end})` or `bookingApi.getCarBookings({start,end})`.
-- Backend repository returns interval intersections using `existing.startTime < rangeEnd` and `existing.endTime > rangeStart`.
-- Frontend filters rejected/cancelled and selected room/car locally.
+## Trạng Thái PWA Hiện Tại
 
-Current gaps:
-- No `AbortController` or stale response guard.
-- `filteredEvents` is not memoized.
-- Selected room/car is not passed to API yet, so range can still include all resources.
-- Admin approval and booking detail pages still fetch all room and car bookings.
+- Custom Service Worker tại `frontend/src/sw.js`.
+- Có push event handler và notification click handler.
+- `NAVIGATE` listener nằm ở React global component.
+- Có offline fallback cho navigation.
+- Không runtime-cache dynamic booking/API responses.
+- Android/iOS PWA có required notification gate sau login.
+- Cần test thật trên Android/iOS installed PWA.
 
-## Notification Flow Summary
+## Trạng Thái Runtime Production
 
-Database notification is source of truth:
-- `NotificationEventListener.handle`
-- `NotificationService.createNotification`
-- `NotificationRepository.save`
+- `build-prod.bat`: build frontend và package backend jar.
+- `run.bat`: start Docker `db` + `redis`, chạy jar với profile `prod`, bật Cloudflare Tunnel.
+- `stop-prod.bat`: stop production windows và Docker services.
+- Spring Boot serve SPA static files từ jar.
+- Cloudflare web/API domain đều trỏ backend `8080`.
+- Java runtime trong `run.bat` giới hạn RAM bằng `-Xms256m -Xmx768m`.
 
-Realtime:
-- `NotificationService.pushRealtime`
-- `SimpMessagingTemplate.convertAndSendToUser(recipientId, "/queue/notifications", payload)`
-- Frontend `NotificationContext` subscribes to `/user/queue/notifications`.
+## Trạng Thái Verification
 
-Email:
-- `NotificationEvent.EmailInstruction`
-- `NotificationEventListener.sendEmailIfConfigured`
-- `EmailService` async methods
+Đã verify gần đây:
+- `npm.cmd run build`: pass.
+- `npm.cmd run lint`: pass, còn warning cũ ở `CustomDateHeader.jsx`.
+- `git diff --check`: pass, chỉ có warning LF/CRLF Windows.
 
-Web Push:
-- `NotificationEventListener.sendPushIfSubscribed`
-- `PushSubscriptionService.findActiveByUser`
-- `PushService.sendPush`
-- Browser service worker receives `push` and displays OS notification if no focused client.
+Backend test:
+- `.\mvnw.cmd test` từng pass sau 7.9/7.11.
+- Sau đó test fail trên JDK 23 vì Mockito/ByteBuddy không self-attach. Cần dùng JDK 21 hoặc cấu hình Mockito Java agent.
 
-## PWA Current State
+## Quy Tắc Bắt Buộc
 
-Implemented:
-- PWA manifest in `vite.config.js`.
-- Multiple icons plus maskable icons.
-- Custom service worker at `frontend/src/sw.js`.
-- Push subscribe/unsubscribe logic.
-- iOS detection and Add to Home Screen guard in `usePushNotifications`.
-- Notification click attempts to focus client and post `NAVIGATE`, or opens a new window.
-- `DashboardLayout` listens for service-worker `NAVIGATE` messages.
-
-Gaps:
-- Listener lives in protected dashboard layout, not globally in `main.jsx`.
-- No explicit production Nginx/SPA rewrite config found.
-- Offline fallback is only precache-based; dynamic booking API is not runtime cached, which is good until invalidation exists.
-
-## Current Verification Status
-
-| Area | Status | Evidence |
-|---|---|---|
-| Calendar range API | IMPLEMENTED | Controllers accept `start/end`; repositories implement interval intersection. |
-| Calendar visible range fetch | IMPLEMENTED | `RoomBooking.jsx` and `CarBooking.jsx` call booking API with range. |
-| Stale request guard | NOT FOUND | No AbortController/request id guard in calendar pages. |
-| Route lazy loading | NOT FOUND | `App.jsx` imports all pages synchronously. |
-| Notification DB source | IMPLEMENTED | `NotificationService.createNotification` persists first. |
-| Notification after commit | IMPLEMENTED | `@TransactionalEventListener(phase = AFTER_COMMIT)`. |
-| WebSocket auth | IMPLEMENTED | STOMP CONNECT token validation in `WebSocketConfig`. |
-| Booking requester from JWT | VERIFIED issue | Services use `request.getRequesterId()`. |
-| Approval approver from JWT | VERIFIED issue | `ApprovalService` uses `request.getApproverId()`. |
-| Cancel canceller from JWT | VERIFIED issue | Cancel services use `request.getCancellerId()`. |
-| Booking overlap lock | IMPLEMENTED | Room/vehicle repositories use pessimistic write lock. |
-| Booking overlap DB index | NOT FOUND | Booking entities do not declare composite indexes; no migration files found. |
-| Notification indexes/unique | IMPLEMENTED | `Notification` has indexes and unique constraint. |
-| Push endpoint unique | IMPLEMENTED | `PushSubscription` has unique endpoint constraint. |
-| Push retry/backoff | NOT FOUND | `PushService` logs non-terminal failures but does not retry. |
-| Email frontend URL config | VERIFIED issue | Email links hard-code `https://cfcbooking.io.vn`. |
-| Secret management | VERIFIED issue | `application.yml` contains real-looking default secrets/passwords. |
-| Production migration | NOT FOUND | `ddl-auto: update`; no Flyway/Liquibase migrations found. |
-| Scheduler reminders/completed | NOT FOUND | No `@EnableScheduling` or `@Scheduled` methods found. |
-| Docker backend/frontend service | NOT FOUND | Compose defines DB, Redis, Adminer only. |
-| Backend tests | IMPLEMENTED baseline | `mvnw.cmd test` passed 9 tests. |
-| Frontend build/lint | IMPLEMENTED baseline | `npm.cmd run build` and `npm.cmd run lint` passed. |
-
-## Non-Negotiable Rules For Future Work
-
-- Do not trust `requesterId`, `approverId`, `cancellerId`, or dashboard `userId` from the client for protected business actions.
-- Do not put mail or push inside the booking transaction.
-- Do not cache dynamic booking APIs in the service worker without invalidation.
-- Do not add Redis/Kafka/queue just as a best practice. Current Redis is used for refresh tokens.
-- Do not change login/profile/business flow just to match older docs.
-- Do not expose secrets in logs, config defaults, docs, or examples.
-- Preserve backward-compatible APIs unless the phase explicitly includes a migration.
-- When touching datetime, test timezone and midnight boundary cases.
-- When touching PWA, test Android, iOS Safari, and installed iOS PWA behavior.
-- When touching Docker/deploy, test CORS, HTTPS, SPA refresh, and persistent DB volume.
+- Code hiện tại là `Source of Truth`.
+- Không refactor ngoài task.
+- Không đổi login/profile flow nếu task không yêu cầu.
+- Không log hoặc commit secrets.
+- Không đưa mail/push vào booking transaction.
+- Không runtime-cache booking API nếu chưa có invalidation design.
+- Không tin identity từ request body.
+- Luôn chạy `npm.cmd run build` và `npm.cmd run lint` khi đổi frontend/routing/PWA.
+- Luôn cố chạy `.\mvnw.cmd test` khi đổi backend; nếu fail do môi trường, báo rõ.
