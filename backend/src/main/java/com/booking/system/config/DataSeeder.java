@@ -41,8 +41,8 @@ public class DataSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) throws Exception {
-        User duy = createAdminIfNotExists("cfcbooking@gamil.com", "Admin CFC", "admin123@");
-        createAdminIfNotExists("dienpm@gamil.com", "Phan Thị Minh Diễn", "admin123@");
+        User duy = createAdminIfNotExists("cfcbooking@gmail.com", "Admin CFC", "admin123@");
+        createAdminIfNotExists("dienpm@gmail.com", "Phan Thị Minh Diễn", "admin123@");
 
         seedDepartments();
         Room pTruyenThong = seedRooms();

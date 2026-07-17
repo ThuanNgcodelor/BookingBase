@@ -6,8 +6,8 @@ services:
     container_name: booking_db
     restart: always
     command:
-      - --innodb-buffer-pool-size=256M
-      - --max-connections=50
+      - --innodb-buffer-pool-size=128M
+      - --max-connections=30
       - --performance-schema=OFF
     environment:
       MYSQL_ROOT_PASSWORD: rootpassword
@@ -16,6 +16,10 @@ services:
       MYSQL_PASSWORD: Thuan@417
     ports:
       - "3306:3306"
+    deploy:
+      resources:
+        limits:
+          memory: 400M
     volumes:
       - db_data:/var/lib/mysql
 
@@ -23,9 +27,13 @@ services:
     image: redis:7-alpine
     container_name: booking_redis
     restart: always
-    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 64mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
+    deploy:
+      resources:
+        limits:
+          memory: 150M
     volumes:
       - redis_data:/data
 
@@ -35,6 +43,10 @@ services:
     restart: always
     ports:
       - "8081:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 100M
     depends_on:
       - db
 

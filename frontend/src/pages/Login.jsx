@@ -158,7 +158,7 @@ export default function Login() {
             {loading ? 'Đang xử lý...' : 'Đăng nhập'}
           </Button>
         </form>
-
+{/* 
         <div className="mb-4 flex items-center gap-3">
           <div className="h-px flex-1 bg-gray-200" />
           <span className="text-xs font-medium uppercase text-gray-400">Hoặc</span>
@@ -182,13 +182,14 @@ export default function Login() {
             />
           )}
         </div>
-
         <p className="text-center text-sm text-gray-600">
           Chưa có tài khoản?{' '}
           <Link to="/register" className="font-medium text-blue-600 hover:text-blue-700">
             Đăng ký bằng email
           </Link>
         </p>
+*/}
+
       </div>
     </div>
   );

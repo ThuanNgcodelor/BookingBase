@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Start / Rebuild BookingBase
+Comment=Build va khoi dong lai BookingBase production
+Icon=utilities-terminal
+Terminal=false
+Path=/home/david-nguyen/Works/BookingBase
+Exec=/usr/bin/gnome-terminal --wait --title=BookingBase -- /usr/bin/bash -lc "/home/david-nguyen/Works/BookingBase/deployserver/linux/build-prod.sh && echo && echo 'BOOKINGBASE DA BUILD VA KHOI DONG THANH CONG' || echo && echo 'BOOKINGBASE GAP LOI - XEM LOG PHIA TREN'; echo; read -r -p 'Nhan Enter de dong cua so...'"
+Categories=Development;
+StartupNotify=true

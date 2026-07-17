@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Stop BookingBase
+Comment=Tat backend, Cloudflare Tunnel, MySQL va Redis
+Icon=system-shutdown
+Terminal=false
+Path=/home/david-nguyen/Works/BookingBase
+Exec=/usr/bin/gnome-terminal --wait --title=Stop-BookingBase -- /usr/bin/bash -lc "/home/david-nguyen/Works/BookingBase/deployserver/linux/stop-prod.sh; echo; read -r -p 'Nhan Enter de dong cua so...'"
+Categories=Development;
+StartupNotify=true
