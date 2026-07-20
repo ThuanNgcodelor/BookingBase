@@ -21,12 +21,31 @@ import ServiceWorkerNavigateListener from './components/ServiceWorkerNavigateLis
 import Cookies from 'js-cookie';
 import { authApi } from './api/authApi';
 
-// Component bảo vệ Route Đăng nhập (Chưa đăng nhập mới vào được)
+const SessionCheckScreen = ({ unavailable = false }) => (
+  <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center', justifyContent: 'center' }}>
+    <span style={{ color: '#6b7280', fontSize: '14px' }}>
+      {unavailable ? 'Chưa thể kết nối để kiểm tra phiên đăng nhập.' : 'Đang kiểm tra phiên đăng nhập...'}
+    </span>
+    {unavailable && <button type="button" onClick={() => window.location.reload()}>Thử lại</button>}
+  </div>
+);
+
+// Trang login cũng phải khôi phục phiên bằng refresh token, đặc biệt khi iOS mở PWA lại.
 const LoginRoute = ({ children }) => {
-  const token = Cookies.get('accessToken');
-  if (token) {
-    return <Navigate to="/" replace />;
-  }
+  const accessToken = Cookies.get('accessToken');
+  const refreshToken = Cookies.get('refreshToken');
+  const [status, setStatus] = useState(accessToken ? 'authenticated' : refreshToken ? 'refreshing' : 'guest');
+
+  useEffect(() => {
+    if (status !== 'refreshing') return;
+    authApi.silentRefresh()
+      .then((ok) => setStatus(ok ? 'authenticated' : 'guest'))
+      .catch(() => setStatus('unavailable'));
+  }, [status]);
+
+  if (status === 'refreshing') return <SessionCheckScreen />;
+  if (status === 'unavailable') return <SessionCheckScreen unavailable />;
+  if (status === 'authenticated') return <Navigate to="/" replace />;
   return children;
 };
 
@@ -39,17 +58,16 @@ const ProtectedRoute = ({ children }) => {
 
   useEffect(() => {
     if (status !== 'refreshing') return;
-    authApi.silentRefresh().then((ok) => setStatus(ok ? 'ok' : 'denied'));
+    authApi.silentRefresh()
+      .then((ok) => setStatus(ok ? 'ok' : 'denied'))
+      .catch(() => setStatus('unavailable'));
   }, [status]);
 
   if (status === 'refreshing') {
     // Hiện màn hình chờ nhẹ trong khi refresh
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ color: '#6b7280', fontSize: '14px' }}>Đang kiểm tra phiên đăng nhập...</span>
-      </div>
-    );
+    return <SessionCheckScreen />;
   }
+  if (status === 'unavailable') return <SessionCheckScreen unavailable />;
   if (status === 'denied') {
     return <Navigate to="/login" replace />;
   }

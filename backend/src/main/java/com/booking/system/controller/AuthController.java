@@ -14,6 +14,7 @@ import com.booking.system.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -30,7 +31,7 @@ public class AuthController {
             AuthResponse response = authService.authenticate(request.getEmail(), request.getPassword());
             return ResponseEntity.ok(ApiResponse.success(response, "Đăng nhập thành công"));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(ApiResponse.error(401, e.getMessage()));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(401, e.getMessage()));
         }
     }
 
@@ -43,7 +44,7 @@ public class AuthController {
             AuthResponse response = authService.authenticateWithGoogle(request.getIdToken());
             return ResponseEntity.ok(ApiResponse.success(response, "Đăng nhập thành công"));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(ApiResponse.error(401, e.getMessage()));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(401, e.getMessage()));
         }
     }
 
@@ -62,8 +63,8 @@ public class AuthController {
     @PostMapping("/register/verify")
     public ResponseEntity<ApiResponse<Void>> verifyRegisterOtp(@Valid @RequestBody RegisterVerifyRequest request) {
         try {
-            authService.verifyRegisterOtp(request.email(), request.otp(), request.password());
-            return ResponseEntity.ok(ApiResponse.success(null, "Đăng ký tài khoản thành công"));
+            authService.verifyRegisterOtp(request.email(), request.otp(), request.fullName(), request.password());
+            return ResponseEntity.ok(ApiResponse.success(null, "Email đã được xác minh. Tài khoản đang chờ quản trị viên phê duyệt"));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(400, e.getMessage()));
         }
@@ -97,7 +98,7 @@ public class AuthController {
             AuthResponse response = authService.refreshToken(request.getRefreshToken());
             return ResponseEntity.ok(ApiResponse.success(response, "Refresh token thành công"));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(ApiResponse.error(401, e.getMessage()));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(401, e.getMessage()));
         }
     }
 

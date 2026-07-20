@@ -12,6 +12,9 @@ import com.booking.system.enums.UserStatus;
 import com.booking.system.repository.DepartmentRepository;
 import com.booking.system.repository.UserRepository;
 import com.booking.system.service.UserProfileService;
+import com.booking.system.service.AccountRegistrationService;
+import com.booking.system.dto.AccountRegistrationResponse;
+import com.booking.system.dto.AccountRegistrationReviewRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -22,10 +25,16 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Arrays;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.http.HttpStatus;
 
 @RestController
 @RequestMapping("/api/v1/users")
@@ -36,6 +45,64 @@ public class UserController {
     private final DepartmentRepository departmentRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserProfileService userProfileService;
+    private final AccountRegistrationService accountRegistrationService;
+
+    @GetMapping("/registration-approvals")
+    public ResponseEntity<ApiResponse<Page<AccountRegistrationResponse>>> getPendingRegistrations(
+            @AuthenticationPrincipal User currentUser,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        try {
+            PageRequest pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 50));
+            return ResponseEntity.ok(ApiResponse.success(
+                    accountRegistrationService.getPending(currentUser, pageable),
+                    "Lấy danh sách tài khoản chờ duyệt thành công"));
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(403, e.getMessage()));
+        }
+    }
+
+    @GetMapping("/registration-approvals/count")
+    public ResponseEntity<ApiResponse<Long>> countPendingRegistrations(@AuthenticationPrincipal User currentUser) {
+        try {
+            return ResponseEntity.ok(ApiResponse.success(
+                    accountRegistrationService.countPending(currentUser),
+                    "Lấy số tài khoản chờ duyệt thành công"));
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(403, e.getMessage()));
+        }
+    }
+
+    @PatchMapping("/{id}/approve-registration")
+    public ResponseEntity<ApiResponse<AccountRegistrationResponse>> approveRegistration(
+            @AuthenticationPrincipal User currentUser,
+            @PathVariable String id) {
+        try {
+            return ResponseEntity.ok(ApiResponse.success(
+                    accountRegistrationService.approve(currentUser, id),
+                    "Đã phê duyệt tài khoản"));
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(403, e.getMessage()));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(400, e.getMessage()));
+        }
+    }
+
+    @PatchMapping("/{id}/reject-registration")
+    public ResponseEntity<ApiResponse<AccountRegistrationResponse>> rejectRegistration(
+            @AuthenticationPrincipal User currentUser,
+            @PathVariable String id,
+            @Valid @RequestBody AccountRegistrationReviewRequest request) {
+        try {
+            return ResponseEntity.ok(ApiResponse.success(
+                    accountRegistrationService.reject(currentUser, id, request.reason()),
+                    "Đã từ chối tài khoản"));
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(403, e.getMessage()));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(400, e.getMessage()));
+        }
+    }
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<AuthResponse.UserDto>> me(@AuthenticationPrincipal User user) {

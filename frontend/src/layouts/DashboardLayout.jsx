@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Home, CalendarRange, CarFront, Bell, CheckSquare, Settings, Menu, FileCheck2, Users } from 'lucide-react';
+import { LogOut, Home, CalendarRange, CarFront, Bell, CheckSquare, Menu, FileCheck2, Users } from 'lucide-react';
 import { authApi } from '../api/authApi';
 import { userApi } from '../api/userApi';
 import { NotificationProvider } from '../contexts/NotificationContext';
 import { useNotificationList, useNotificationUnreadCount } from '../contexts/useNotificationCenter';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import RequiredPushNotificationGate from '../components/RequiredPushNotificationGate';
+import { resolveNotificationTarget } from '../utils/notificationNavigation';
 
 export default function DashboardLayout() {
   return (
@@ -23,6 +24,7 @@ function DashboardLayoutContent() {
   const [imageError, setImageError] = useState(false);
   const [collapsedImageError, setCollapsedImageError] = useState(false);
   const [user, setUser] = useState(() => authApi.getUser() || {});
+  const [pendingRegistrationCount, setPendingRegistrationCount] = useState(0);
 
   const isAdmin = user.role === 'ADMIN';
   const isApprover = user.role === 'ADMIN' || user.role === 'MANAGER';
@@ -51,6 +53,13 @@ function DashboardLayoutContent() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isAdmin) return;
+    userApi.getPendingRegistrationCount()
+      .then(count => setPendingRegistrationCount(Number(count) || 0))
+      .catch(() => {});
+  }, [isAdmin, location.pathname]);
+
   // Tự động đóng sidebar trên mobile khi đổi trang
   useEffect(() => {
     if (window.innerWidth < 768) {
@@ -65,16 +74,15 @@ function DashboardLayoutContent() {
 
   const mainNavItems = [
     { name: 'Trang chủ', path: '/', icon: Home, show: true },
-    { name: 'Đặt phòng họp', path: '/rooms', icon: CalendarRange, show: true },
-    { name: 'Đặt xe', path: '/cars', icon: CarFront, show: true },
+    { name: 'Lịch phòng họp', path: '/rooms', icon: CalendarRange, show: true },
+    { name: 'Lịch xe', path: '/cars', icon: CarFront, show: true },
     { name: 'Thông báo', path: '/notifications', icon: Bell, show: true },
   ];
 
   const adminNavItems = [
-    { name: 'Duyệt yêu cầu', path: '/admin/approvals', icon: CheckSquare, show: isApprover },
+    { name: 'Duyệt đặt chỗ', path: '/admin/approvals', icon: CheckSquare, show: isApprover },
     { name: 'Duyệt hồ sơ', path: '/admin/profile-approvals', icon: FileCheck2, show: isAdmin },
-    { name: 'Tài khoản', path: '/admin/users', icon: Users, show: isAdmin },
-    { name: 'Tài nguyên', path: '/admin/resources', icon: Settings, show: isAdmin },
+    { name: 'Tài khoản', path: '/admin/users', icon: Users, show: isAdmin, badge: pendingRegistrationCount },
   ];
 
   const isCalendarRoute = location.pathname.startsWith('/cars') || location.pathname.startsWith('/rooms');
@@ -116,13 +124,18 @@ function DashboardLayoutContent() {
                   key={item.path}
                   to={item.path}
                   title={!isSidebarOpen ? item.name : ""}
-                  className={`flex items-center ${isSidebarOpen ? 'gap-3 px-3' : 'justify-center'} py-2.5 rounded-md text-sm transition-colors ${isActive
+                    className={`relative flex items-center ${isSidebarOpen ? 'gap-3 px-3' : 'justify-center'} py-2.5 rounded-md text-sm transition-colors ${isActive
                     ? 'bg-blue-50 text-blue-700 font-medium'
                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     }`}
                 >
                   <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-blue-700' : 'text-gray-400'}`} />
-                  {isSidebarOpen && <span>{item.name}</span>}
+                  {isSidebarOpen && <span className="flex-1">{item.name}</span>}
+                  {isSidebarOpen && item.badge > 0 && (
+                    <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-semibold leading-5 text-white">
+                      {item.badge > 99 ? '99+' : item.badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -140,13 +153,18 @@ function DashboardLayoutContent() {
                     key={item.path}
                     to={item.path}
                     title={!isSidebarOpen ? item.name : ""}
-                    className={`flex items-center ${isSidebarOpen ? 'gap-3 px-3' : 'justify-center'} py-2.5 rounded-md text-sm transition-colors ${isActive
+                    className={`relative flex items-center ${isSidebarOpen ? 'gap-3 px-3' : 'justify-center'} py-2.5 rounded-md text-sm transition-colors ${isActive
                       ? 'bg-amber-50 text-amber-700 font-medium'
                       : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                       }`}
                   >
                     <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-amber-700' : 'text-gray-400'}`} />
-                    {isSidebarOpen && <span>{item.name}</span>}
+                    {isSidebarOpen && <span className="flex-1">{item.name}</span>}
+                    {item.badge > 0 && (
+                      <span className={`${isSidebarOpen ? '' : 'absolute -right-1 -top-1'} inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-semibold leading-5 text-white`}>
+                        {item.badge > 99 ? '99+' : item.badge}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -183,7 +201,7 @@ function DashboardLayoutContent() {
               </div>
 
               <div className="flex items-center gap-1 border-t border-gray-100 pt-2">
-                <NotificationMenu expanded user={user} navigate={navigate} />
+                <NotificationMenu expanded navigate={navigate} />
 
                 <button
                   onClick={handleLogout}
@@ -216,7 +234,7 @@ function DashboardLayoutContent() {
                 )}
               </div>
 
-              <NotificationMenu user={user} navigate={navigate} />
+              <NotificationMenu navigate={navigate} />
 
               <button
                 onClick={handleLogout}
@@ -275,7 +293,7 @@ function DashboardLayoutContent() {
   );
 }
 
-function NotificationMenu({ expanded = false, user, navigate }) {
+function NotificationMenu({ expanded = false, navigate }) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
   const { unreadCount } = useNotificationUnreadCount();
@@ -317,7 +335,6 @@ function NotificationMenu({ expanded = false, user, navigate }) {
       {isOpen && (
         <NotificationDropdown
           expanded={expanded}
-          user={user}
           navigate={navigate}
           unreadCount={unreadCount}
           onClose={() => setIsOpen(false)}
@@ -327,7 +344,7 @@ function NotificationMenu({ expanded = false, user, navigate }) {
   );
 }
 
-function NotificationDropdown({ expanded, user, navigate, unreadCount, onClose }) {
+function NotificationDropdown({ expanded, navigate, unreadCount, onClose }) {
   const {
     notifications,
     loading,
@@ -344,16 +361,7 @@ function NotificationDropdown({ expanded, user, navigate, unreadCount, onClose }
       console.error(err);
     }
 
-    const title = notif.title?.toLowerCase() || '';
-    if (notif.targetUrl) {
-      navigate(notif.targetUrl);
-    } else if (user?.role === 'ADMIN' && (title.includes('mới') || title.includes('chờ duyệt'))) {
-      navigate('/admin/approvals');
-    } else if (title.includes('phòng')) {
-      navigate('/rooms');
-    } else if (title.includes('xe')) {
-      navigate('/cars');
-    }
+    navigate(resolveNotificationTarget(notif));
     onClose();
   };
 

@@ -96,7 +96,11 @@ public class BookingCarService {
                             "xe",
                             requester.getFullName(),
                             saved.getDeparture() + " - " + saved.getDestination(),
-                            null
+                            null,
+                            new NotificationEvent.BookingEmailDetails(
+                                    saved.getVehicle().getLicensePlate(), null,
+                                    saved.getDeparture(), saved.getDestination(),
+                                    saved.getStartTime(), saved.getEndTime())
                     )
             ));
         }

@@ -100,7 +100,8 @@ public class ApprovalService {
                             "phòng",
                             null,
                             booking.getTitle(),
-                            null
+                            null,
+                            roomDetails(booking)
                     )
             ));
         }
@@ -136,7 +137,8 @@ public class ApprovalService {
                             "phòng",
                             null,
                             booking.getTitle(),
-                            reason
+                            reason,
+                            roomDetails(booking)
                     )
             ));
         }
@@ -170,7 +172,8 @@ public class ApprovalService {
                             "xe",
                             null,
                             booking.getDeparture() + " - " + booking.getDestination(),
-                            null
+                            null,
+                            carDetails(booking)
                     )
             ));
         }
@@ -206,7 +209,8 @@ public class ApprovalService {
                             "xe",
                             null,
                             booking.getDeparture() + " - " + booking.getDestination(),
-                            reason
+                            reason,
+                            carDetails(booking)
                     )
             ));
         }
@@ -247,6 +251,20 @@ public class ApprovalService {
 
     private String buildRejectionMessage(String message, String reason) {
         return reason == null ? message : message + " Lý do: " + reason;
+    }
+
+    private NotificationEvent.BookingEmailDetails roomDetails(BookingRoom booking) {
+        return new NotificationEvent.BookingEmailDetails(
+                booking.getRoom() == null ? null : booking.getRoom().getName(),
+                booking.getRoom() == null ? null : booking.getRoom().getLocation(), null, null,
+                booking.getStartTime(), booking.getEndTime());
+    }
+
+    private NotificationEvent.BookingEmailDetails carDetails(BookingCar booking) {
+        return new NotificationEvent.BookingEmailDetails(
+                booking.getVehicle() == null ? null : booking.getVehicle().getLicensePlate(), null,
+                booking.getDeparture(), booking.getDestination(),
+                booking.getStartTime(), booking.getEndTime());
     }
 
     private void saveApprovalStep(User approver, BookingRoom room, BookingCar car, ApprovalStatus status, String reason) {

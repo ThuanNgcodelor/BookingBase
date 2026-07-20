@@ -29,7 +29,7 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait-primary',
         scope: '/',
-        start_url: '/login',
+        start_url: '/',
         lang: 'vi',
         icons: [
           { src: '/icons/icon-72x72.png', sizes: '72x72', type: 'image/png' },

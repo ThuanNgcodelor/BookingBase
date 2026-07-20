@@ -51,7 +51,7 @@ public class Notification {
     @Column(name = "target_url")
     private String targetUrl;
 
-    @Column(name = "source_type")
+    @Column(name = "source_type", length = 64)
     private String sourceType;
 
     @Column(name = "source_id")
@@ -62,7 +62,7 @@ public class Notification {
     private NotificationPriority priority = NotificationPriority.NORMAL;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 64)
     private NotificationType type;
 
     @JsonProperty("isRead")

@@ -5,6 +5,7 @@ import { authApi } from '../api/authApi';
 import { useNotificationCenter } from '../contexts/useNotificationCenter';
 import PushNotificationSettings from '../components/PushNotificationSettings';
 import { formatViDateTime } from '../utils/dateTime';
+import { resolveNotificationTarget } from '../utils/notificationNavigation';
 
 export default function Notifications() {
   const [notifications, setNotifications] = useState([]);
@@ -64,16 +65,7 @@ export default function Notifications() {
       }
     }
 
-    // Navigate based on type/title
-    if (notif.targetUrl) {
-      navigate(notif.targetUrl);
-    } else if (user?.role === 'ADMIN' && (notif.title.toLowerCase().includes('mới') || notif.title.toLowerCase().includes('chờ duyệt'))) {
-      navigate('/admin/approvals');
-    } else if (notif.title.toLowerCase().includes('phòng')) {
-      navigate('/rooms');
-    } else if (notif.title.toLowerCase().includes('xe')) {
-      navigate('/cars');
-    }
+    navigate(resolveNotificationTarget(notif));
   };
 
   const handleMarkAllAsRead = async () => {

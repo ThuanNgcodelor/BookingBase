@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { authApi } from '../api/authApi';
 import { Button } from '../components/ui/Button';
 import SEOHead from '../components/SEOHead';
 
 export default function Register() {
-  const navigate = useNavigate();
   const [step, setStep] = useState('email');
-  const [form, setForm] = useState({ email: '', otp: '', password: '', confirmPassword: '' });
+  const [form, setForm] = useState({ email: '', otp: '', fullName: '', password: '', confirmPassword: '' });
   const [loading, setLoading] = useState(false);
 
   const updateField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
@@ -39,10 +38,10 @@ export default function Register() {
       await authApi.verifyRegisterOtp({
         email: form.email,
         otp: form.otp,
+        fullName: form.fullName,
         password: form.password,
       });
-      toast.success('Đăng ký thành công. Vui lòng đăng nhập');
-      navigate('/login');
+      setStep('pending');
     } catch (error) {
       toast.error(error.response?.data?.message || 'Không thể hoàn tất đăng ký');
     } finally {
@@ -77,10 +76,21 @@ export default function Register() {
               {loading ? 'Đang gửi...' : 'Gửi OTP'}
             </Button>
           </form>
-        ) : (
+        ) : step === 'verify' ? (
           <form onSubmit={verifyOtp} className="space-y-4">
             <div className="p-3 rounded-md bg-blue-50 text-blue-700 text-sm border border-blue-100">
               OTP đã được gửi tới <strong>{form.email}</strong>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-700">Họ và tên</label>
+              <input
+                value={form.fullName}
+                onChange={(e) => updateField('fullName', e.target.value)}
+                required
+                maxLength={255}
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
+                placeholder="Nguyễn Văn A"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">OTP</label>
@@ -101,6 +111,8 @@ export default function Register() {
                 value={form.password}
                 onChange={(e) => updateField('password', e.target.value)}
                 required
+                minLength={6}
+                maxLength={72}
                 className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
               />
             </div>
@@ -111,13 +123,27 @@ export default function Register() {
                 value={form.confirmPassword}
                 onChange={(e) => updateField('confirmPassword', e.target.value)}
                 required
+                minLength={6}
+                maxLength={72}
                 className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500"
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Đang xử lý...' : 'Hoàn tất đăng ký'}
+              {loading ? 'Đang xử lý...' : 'Xác minh và gửi đăng ký'}
             </Button>
           </form>
+        ) : (
+          <div className="text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-2xl">✓</div>
+            <h2 className="mt-4 text-xl font-semibold text-gray-900">Đăng ký đã được gửi</h2>
+            <p className="mt-3 text-sm leading-6 text-gray-600">
+              Email <strong>{form.email}</strong> đã được xác minh. Tài khoản đang chờ quản trị viên phê duyệt.
+            </p>
+            <p className="mt-2 text-sm text-gray-500">Bạn sẽ nhận được email khi tài khoản được kích hoạt.</p>
+            <Link to="/login" className="mt-6 inline-flex rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+              Trở về đăng nhập
+            </Link>
+          </div>
         )}
 
         <p className="text-center text-sm text-gray-600 mt-6">

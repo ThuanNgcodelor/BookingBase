@@ -83,12 +83,15 @@ public class NotificationEventListener {
                     recipient.getEmail(),
                     email.requesterName(),
                     email.resourceType(),
-                    email.title()
+                    email.title(),
+                    email.bookingDetails()
             );
         } else if (email.type() == NotificationEvent.EmailType.BOOKING_APPROVED) {
-            emailService.sendBookingApprovedEmail(recipient.getEmail(), email.resourceType(), email.title());
+            emailService.sendBookingApprovedEmail(
+                    recipient.getEmail(), email.resourceType(), email.title(), email.bookingDetails());
         } else if (email.type() == NotificationEvent.EmailType.BOOKING_REJECTED) {
-            emailService.sendBookingRejectedEmail(recipient.getEmail(), email.resourceType(), email.title(), email.reason());
+            emailService.sendBookingRejectedEmail(
+                    recipient.getEmail(), email.resourceType(), email.title(), email.reason(), email.bookingDetails());
         } else if (email.type() == NotificationEvent.EmailType.PROFILE_UPDATE_REQUESTED_TO_ADMIN) {
             emailService.sendProfileUpdateRequestedEmailToAdmin(
                     recipient.getEmail(),
@@ -106,6 +109,13 @@ public class NotificationEventListener {
                     email.title(),
                     email.reason()
             );
+        } else if (email.type() == NotificationEvent.EmailType.ACCOUNT_REGISTRATION_PENDING) {
+            emailService.sendAccountRegistrationPendingEmail(recipient.getEmail(), email.requesterName());
+        } else if (email.type() == NotificationEvent.EmailType.ACCOUNT_REGISTRATION_APPROVED) {
+            emailService.sendAccountRegistrationApprovedEmail(recipient.getEmail(), email.requesterName());
+        } else if (email.type() == NotificationEvent.EmailType.ACCOUNT_REGISTRATION_REJECTED) {
+            emailService.sendAccountRegistrationRejectedEmail(
+                    recipient.getEmail(), email.requesterName(), email.reason());
         }
     }
 
@@ -146,6 +156,14 @@ public class NotificationEventListener {
         if (event.type() == NotificationType.PROFILE_UPDATE_APPROVED
                 || event.type() == NotificationType.PROFILE_UPDATE_REJECTED) {
             return "/profile";
+        }
+        if (event.type() == NotificationType.ACCOUNT_REGISTRATION_REQUESTED) {
+            return "/admin/users?tab=pending";
+        }
+        if (event.type() == NotificationType.ACCOUNT_REGISTRATION_APPROVED
+                || event.type() == NotificationType.ACCOUNT_REGISTRATION_REJECTED
+                || event.type() == NotificationType.ACCOUNT_REGISTRATION_PENDING) {
+            return "/login";
         }
         return notification.getTargetUrl();
     }

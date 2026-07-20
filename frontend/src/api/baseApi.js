@@ -1,5 +1,6 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
+import { clearAuthCookies, isInvalidRefreshError, setAuthCookies } from './authStorage';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
@@ -9,6 +10,31 @@ export const baseApi = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+let refreshPromise = null;
+
+export function refreshAccessToken() {
+  if (refreshPromise) return refreshPromise;
+
+  const refreshToken = Cookies.get('refreshToken');
+  if (!refreshToken) {
+    const error = new Error('No refresh token available');
+    error.code = 'NO_REFRESH_TOKEN';
+    return Promise.reject(error);
+  }
+
+  refreshPromise = axios.post(`${API_URL}/auth/refresh`, { refreshToken })
+    .then((response) => {
+      const authData = response.data.data;
+      setAuthCookies(authData);
+      return authData;
+    })
+    .finally(() => {
+      refreshPromise = null;
+    });
+
+  return refreshPromise;
+}
 
 baseApi.interceptors.request.use(
   (config) => {
@@ -32,35 +58,24 @@ baseApi.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshToken = Cookies.get('refreshToken');
-        if (!refreshToken) {
-          throw new Error('No refresh token available');
-        }
-
-        // Gọi API cấp lại token mới
-        const res = await axios.post(`${API_URL}/auth/refresh`, {
-          refreshToken,
-        });
-
-        const { accessToken, refreshToken: newRefreshToken } = res.data.data;
-
-        // Lưu lại token mới
-        Cookies.set('accessToken', accessToken, { expires: 1 / 3 }); // 8 tiếng
-        Cookies.set('refreshToken', newRefreshToken, { expires: 7 });
+        const { accessToken } = await refreshAccessToken();
 
         // Gắn token mới vào request cũ và gọi lại
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return baseApi(originalRequest);
       } catch (refreshError) {
+        // Mất mạng/timeout khi iOS vừa khôi phục PWA không có nghĩa phiên đã hết hạn.
+        if (!isInvalidRefreshError(refreshError)) {
+          return Promise.reject(refreshError);
+        }
+
+        clearAuthCookies();
         // Nếu request được đánh dấu `_silent` (polling, background), KHÔNG logout
         // Tránh trường hợp polling tự động kick user ra ngoài
         if (originalRequest._silent) {
           return Promise.reject(refreshError);
         }
         // Request thông thường: xóa token và redirect về login
-        Cookies.remove('accessToken');
-        Cookies.remove('refreshToken');
-        Cookies.remove('user');
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }

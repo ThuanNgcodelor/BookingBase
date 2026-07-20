@@ -13,7 +13,10 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 @Setter
 @Entity
 @Table(name = "users")
-@JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "password", "department"})
+@JsonIgnoreProperties({
+        "hibernateLazyInitializer", "handler", "password", "department",
+        "registrationReviewedBy", "registrationReviewedAt", "registrationReviewReason"
+})
 public class User {
     
     @Id
@@ -40,6 +43,7 @@ public class User {
     private RoleEnum role;
     
     @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 32)
     private UserStatus status;
     
     @ManyToOne(fetch = FetchType.LAZY)
@@ -48,4 +52,14 @@ public class User {
     
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "registration_reviewed_by_id")
+    private User registrationReviewedBy;
+
+    @Column(name = "registration_reviewed_at")
+    private LocalDateTime registrationReviewedAt;
+
+    @Column(name = "registration_review_reason", length = 1000)
+    private String registrationReviewReason;
 }

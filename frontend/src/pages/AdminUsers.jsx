@@ -4,6 +4,8 @@ import { UserPlus } from 'lucide-react';
 import { userApi } from '../api/userApi';
 import { Button } from '../components/ui/Button';
 import SEOHead from '../components/SEOHead';
+import AdminPendingRegistrations from '../components/admin/AdminPendingRegistrations';
+import { useSearchParams } from 'react-router-dom';
 
 const initialForm = {
   email: '',
@@ -13,6 +15,9 @@ const initialForm = {
 };
 
 export default function AdminUsers() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') === 'pending' ? 'pending' : 'create');
+  const [pendingCount, setPendingCount] = useState(0);
   const [form, setForm] = useState(initialForm);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -32,6 +37,19 @@ export default function AdminUsers() {
 
     loadDepartments();
   }, []);
+
+  useEffect(() => {
+    userApi.getPendingRegistrationCount().then(setPendingCount).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setActiveTab(searchParams.get('tab') === 'pending' ? 'pending' : 'create');
+  }, [searchParams]);
+
+  const selectTab = (tab) => {
+    setActiveTab(tab);
+    setSearchParams(tab === 'pending' ? { tab: 'pending' } : {});
+  };
 
   const updateField = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -73,12 +91,20 @@ export default function AdminUsers() {
           <UserPlus className="h-4 w-4" />
           Quản trị tài khoản
         </div>
-        <h1 className="mt-3 text-2xl font-semibold text-gray-900">Tạo tài khoản bằng Email</h1>
+        <h1 className="mt-3 text-2xl font-semibold text-gray-900">Quản lý tài khoản</h1>
         <p className="mt-2 text-sm text-gray-500">
           Admin nhập email và mật khẩu dạng số theo nhu cầu vận hành. Mật khẩu sẽ được mã hóa trước khi lưu.
         </p>
       </div>
 
+      <div className="mb-5 flex w-fit rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+        <button type="button" onClick={() => selectTab('pending')} className={`rounded-md px-4 py-2 text-sm font-medium ${activeTab === 'pending' ? 'bg-amber-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>Chờ phê duyệt{pendingCount > 0 ? ` (${pendingCount})` : ''}</button>
+        <button type="button" onClick={() => selectTab('create')} className={`rounded-md px-4 py-2 text-sm font-medium ${activeTab === 'create' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>Tạo tài khoản</button>
+      </div>
+
+      {activeTab === 'pending' ? (
+        <AdminPendingRegistrations onCountChange={setPendingCount} />
+      ) : (
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid gap-5 sm:grid-cols-2">
@@ -149,6 +175,7 @@ export default function AdminUsers() {
           </div>
         </form>
       </div>
+      )}
     </div>
   );
 }

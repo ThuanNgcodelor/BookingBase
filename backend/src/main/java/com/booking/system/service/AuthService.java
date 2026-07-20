@@ -15,10 +15,16 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.context.ApplicationEventPublisher;
+import com.booking.system.event.NotificationEvent;
+import com.booking.system.enums.NotificationPriority;
+import com.booking.system.enums.NotificationType;
 
 import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -30,9 +36,13 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final OtpService otpService;
     private final OtpMailService otpMailService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Value("${spring.security.oauth2.client.registration.google.client-id:YOUR_GOOGLE_CLIENT_ID}")
     private String googleClientId;
+
+    @Value("${jwt.refresh.expiration:7776000000}")
+    private long refreshExpirationMs;
 
     public AuthResponse authenticate(String email, String password) {
         User user = userRepository.findByEmail(normalizeEmail(email))
@@ -42,9 +52,7 @@ public class AuthService {
             throw new RuntimeException("Email hoặc mật khẩu không chính xác");
         }
 
-        if (user.getStatus() == UserStatus.INACTIVE) {
-            throw new RuntimeException("Tài khoản đã bị khóa");
-        }
+        requireActiveAccount(user);
 
         return generateTokensForUser(user);
     }
@@ -61,7 +69,8 @@ public class AuthService {
     }
 
     // Xác thực OTP và tạo tài khoản email/password mặc định quyền nhân viên.
-    public void verifyRegisterOtp(String email, String otp, String password) {
+    @Transactional
+    public void verifyRegisterOtp(String email, String otp, String fullName, String password) {
         String normalizedEmail = normalizeEmail(email);
         if (userRepository.existsByEmail(normalizedEmail)) {
             otpService.deleteOtp(otpService.registerKey(normalizedEmail));
@@ -72,11 +81,41 @@ public class AuthService {
 
         User user = new User();
         user.setEmail(normalizedEmail);
-        user.setFullName(normalizedEmail.substring(0, normalizedEmail.indexOf("@")));
+        user.setFullName(fullName.trim());
         user.setPassword(passwordEncoder.encode(password));
         user.setRole(RoleEnum.EMPLOYEE);
-        user.setStatus(UserStatus.ACTIVE);
-        userRepository.save(user);
+        user.setStatus(UserStatus.PENDING_APPROVAL);
+        User saved = userRepository.save(user);
+
+        eventPublisher.publishEvent(new NotificationEvent(
+                saved.getId(),
+                null,
+                NotificationType.ACCOUNT_REGISTRATION_PENDING,
+                "Tài khoản đang chờ phê duyệt",
+                "Email của bạn đã được xác minh. Tài khoản đang chờ quản trị viên phê duyệt.",
+                "/login",
+                "ACCOUNT_REGISTRATION",
+                saved.getId(),
+                NotificationPriority.NORMAL,
+                new NotificationEvent.EmailInstruction(
+                        NotificationEvent.EmailType.ACCOUNT_REGISTRATION_PENDING,
+                        "tài khoản", saved.getFullName(), "Đang chờ phê duyệt", null)
+        ));
+
+        for (User admin : userRepository.findByRole(RoleEnum.ADMIN)) {
+            eventPublisher.publishEvent(new NotificationEvent(
+                    admin.getId(),
+                    saved.getId(),
+                    NotificationType.ACCOUNT_REGISTRATION_REQUESTED,
+                    "Tài khoản mới chờ phê duyệt",
+                    saved.getFullName() + " (" + saved.getEmail() + ") đã xác minh email và đăng ký tài khoản.",
+                    "/admin/users?tab=pending",
+                    "ACCOUNT_REGISTRATION",
+                    saved.getId(),
+                    NotificationPriority.HIGH,
+                    null
+            ));
+        }
     }
 
     // Gửi OTP đặt lại mật khẩu cho email đang tồn tại.
@@ -136,22 +175,13 @@ public class AuthService {
 
         if (userOpt.isPresent()) {
             user = userOpt.get();
-            if (user.getStatus() == UserStatus.INACTIVE) {
-                throw new RuntimeException("Tài khoản đã bị khóa");
-            }
+            requireActiveAccount(user);
             // Cập nhật tên/avatar mới nhất từ Google
             user.setFullName(name);
             user.setAvatarUrl(pictureUrl);
             user = userRepository.save(user);
         } else {
-            // Tạo mới user
-            user = new User();
-            user.setEmail(normalizeEmail(email));
-            user.setFullName(name);
-            user.setAvatarUrl(pictureUrl);
-            user.setRole(RoleEnum.EMPLOYEE);
-            user.setStatus(UserStatus.ACTIVE);
-            user = userRepository.save(user);
+            throw new RuntimeException("Tài khoản chưa tồn tại. Vui lòng đăng ký bằng email và xác minh OTP");
         }
 
         return generateTokensForUser(user);
@@ -159,13 +189,14 @@ public class AuthService {
 
     private AuthResponse generateTokensForUser(User user) {
         String accessToken = jwtUtils.generateAccessToken(user.getEmail(), user.getRole().name());
-        String refreshToken = jwtUtils.generateRefreshToken(user.getEmail());
+        String sessionId = UUID.randomUUID().toString();
+        String refreshToken = jwtUtils.generateRefreshToken(user.getEmail(), sessionId);
 
         redisTemplate.opsForValue().set(
-                "refreshToken:" + user.getEmail(),
+                refreshTokenKey(user.getEmail(), sessionId),
                 refreshToken,
-                7,
-                TimeUnit.DAYS
+                refreshExpirationMs,
+                TimeUnit.MILLISECONDS
         );
 
         AuthResponse.UserDto userDto = new AuthResponse.UserDto(
@@ -189,7 +220,11 @@ public class AuthService {
         }
 
         String email = jwtUtils.getEmailFromJwtToken(refreshToken);
-        String savedToken = redisTemplate.opsForValue().get("refreshToken:" + email);
+        String currentSessionId = jwtUtils.getSessionIdFromRefreshToken(refreshToken);
+        String currentTokenKey = currentSessionId == null
+                ? legacyRefreshTokenKey(email)
+                : refreshTokenKey(email, currentSessionId);
+        String savedToken = redisTemplate.opsForValue().get(currentTokenKey);
 
         if (savedToken == null || !savedToken.equals(refreshToken)) {
             throw new RuntimeException("Refresh token không khớp hoặc đã bị thu hồi");
@@ -197,12 +232,21 @@ public class AuthService {
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy user"));
+        requireActiveAccount(user);
 
         // Cấp lại token mới
         String newAccessToken = jwtUtils.generateAccessToken(user.getEmail(), user.getRole().name());
-        String newRefreshToken = jwtUtils.generateRefreshToken(user.getEmail());
+        String newSessionId = currentSessionId == null ? UUID.randomUUID().toString() : currentSessionId;
+        String newRefreshToken = jwtUtils.generateRefreshToken(user.getEmail(), newSessionId);
 
-        redisTemplate.opsForValue().set("refreshToken:" + email, newRefreshToken, 7, TimeUnit.DAYS);
+        redisTemplate.opsForValue().set(
+                refreshTokenKey(email, newSessionId),
+                newRefreshToken,
+                refreshExpirationMs,
+                TimeUnit.MILLISECONDS);
+        if (currentSessionId == null) {
+            redisTemplate.delete(currentTokenKey);
+        }
 
         AuthResponse.UserDto userDto = new AuthResponse.UserDto(
                 user.getId(),
@@ -223,7 +267,10 @@ public class AuthService {
         try {
             if (jwtUtils.validateJwtToken(refreshToken)) {
                 String email = jwtUtils.getEmailFromJwtToken(refreshToken);
-                redisTemplate.delete("refreshToken:" + email);
+                String sessionId = jwtUtils.getSessionIdFromRefreshToken(refreshToken);
+                redisTemplate.delete(sessionId == null
+                        ? legacyRefreshTokenKey(email)
+                        : refreshTokenKey(email, sessionId));
             }
         } catch (Exception e) {
             // Bỏ qua lỗi token khi logout phía client.
@@ -232,5 +279,28 @@ public class AuthService {
 
     private String normalizeEmail(String email) {
         return email == null ? "" : email.trim().toLowerCase();
+    }
+
+    private void requireActiveAccount(User user) {
+        if (user.getStatus() == UserStatus.PENDING_APPROVAL) {
+            throw new RuntimeException("Tài khoản đang chờ quản trị viên phê duyệt");
+        }
+        if (user.getStatus() == UserStatus.REJECTED) {
+            throw new RuntimeException("Yêu cầu đăng ký tài khoản đã bị từ chối");
+        }
+        if (user.getStatus() == UserStatus.INACTIVE) {
+            throw new RuntimeException("Tài khoản đã bị khóa");
+        }
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new RuntimeException("Tài khoản chưa được kích hoạt");
+        }
+    }
+
+    private String refreshTokenKey(String email, String sessionId) {
+        return "refreshToken:" + email + ":" + sessionId;
+    }
+
+    private String legacyRefreshTokenKey(String email) {
+        return "refreshToken:" + email;
     }
 }

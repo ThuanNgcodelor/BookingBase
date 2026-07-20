@@ -1,5 +1,6 @@
 package com.booking.system.service;
 
+import com.booking.system.event.NotificationEvent;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
@@ -10,169 +11,181 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+import java.util.ArrayList;
+import java.time.format.DateTimeFormatter;
+
+import static com.booking.system.service.EmailTemplateService.Detail;
+import static com.booking.system.service.EmailTemplateService.Tone;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class EmailService {
 
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
+
     private final JavaMailSender mailSender;
+    private final EmailTemplateService template;
 
     @Value("${spring.mail.username:admin@cfcbooking.io.vn}")
     private String fromEmail;
 
+    @Value("${app.frontend-url:https://cfcbooking.io.vn}")
+    private String frontendUrl;
+
     @Async
-    public void sendBookingCreatedEmailToAdmin(String adminEmail, String requesterName, String resourceType,
-            String title) {
-        String subject = "🔔 Yêu cầu đặt " + resourceType + " mới từ " + requesterName;
-        String content = "<h2>Yêu cầu phê duyệt mới</h2>"
-                + "<p>Xin chào Admin,</p>"
-                + "<p>Bạn vừa nhận được một yêu cầu đặt <b>" + resourceType + "</b> mới từ <b>" + requesterName
-                + "</b>.</p>"
-                + "<div style='background-color: #f8fafc; padding: 15px; border-left: 4px solid #3b82f6; margin: 20px 0;'>"
-                + "  <p style='margin: 0;'><b>Tiêu đề:</b> " + title + "</p>"
-                + "</div>"
-                + "<p>Vui lòng truy cập hệ thống để xem chi tiết thông tin và tiến hành phê duyệt.</p>"
-                + "<div style='text-align: center; margin: 30px 0;'>"
-                + "  <a href='https://cfcbooking.io.vn/admin/approvals' style='background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;'>ĐI TỚI TRANG PHÊ DUYỆT</a>"
-                + "</div>";
-        sendEmail(adminEmail, subject, buildHtmlTemplate(subject, content));
+    public void sendBookingCreatedEmailToAdmin(String email, String requester, String resource, String title,
+            NotificationEvent.BookingEmailDetails booking) {
+        send(email, "Yêu cầu đặt " + resource + " mới", template.render(
+                "Có yêu cầu đặt " + resource + " mới đang chờ xử lý.",
+                "Yêu cầu đặt " + resource + " mới", "Admin",
+                "Một yêu cầu mới đã được gửi và đang chờ bạn xem xét.", Tone.INFO,
+                bookingDetails(requester, title, booking, null),
+                "Xem yêu cầu", url("/admin/approvals"), "Vui lòng kiểm tra thông tin trước khi phê duyệt."));
     }
 
     @Async
-    public void sendBookingApprovedEmail(String userEmail, String resourceType, String title) {
-        String subject = "✅ Yêu cầu đặt " + resourceType + " ĐÃ ĐƯỢC PHÊ DUYỆT";
-        String content = "<h2>Yêu cầu đã được phê duyệt!</h2>"
-                + "<p>Xin chào,</p>"
-                + "<p>Tin vui! Yêu cầu đặt <b>" + resourceType + "</b> của bạn đã được Admin chấp thuận.</p>"
-                + "<div style='background-color: #f0fdf4; padding: 15px; border-left: 4px solid #22c55e; margin: 20px 0;'>"
-                + "  <p style='margin: 0;'><b>Tiêu đề:</b> " + title + "</p>"
-                + "</div>"
-                + "<p>Bạn có thể truy cập hệ thống để xem lại chi tiết lịch trình của mình.</p>"
-                + "<div style='text-align: center; margin: 30px 0;'>"
-                + "  <a href='https://cfcbooking.io.vn/' style='background-color: #22c55e; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;'>XEM LỊCH TRÌNH</a>"
-                + "</div>";
-        sendEmail(userEmail, subject, buildHtmlTemplate(subject, content));
+    public void sendBookingApprovedEmail(String email, String resource, String title,
+            NotificationEvent.BookingEmailDetails booking) {
+        send(email, "Yêu cầu đặt " + resource + " đã được phê duyệt", template.render(
+                "Yêu cầu đặt " + resource + " của bạn đã được phê duyệt.",
+                "Yêu cầu đã được phê duyệt", null,
+                "Yêu cầu đặt " + resource + " của bạn đã được quản trị viên chấp thuận.", Tone.SUCCESS,
+                bookingDetails(null, title, booking, "Đã phê duyệt"),
+                "Xem lịch đặt", url("/"), null));
     }
 
     @Async
-    public void sendBookingRejectedEmail(String userEmail, String resourceType, String title, String reason) {
-        String subject = "❌ Yêu cầu đặt " + resourceType + " BỊ TỪ CHỐI";
-        String content = "<h2>Yêu cầu không được chấp thuận</h2>"
-                + "<p>Xin chào,</p>"
-                + "<p>Rất tiếc, yêu cầu đặt <b>" + resourceType + "</b> của bạn đã bị Admin từ chối.</p>"
-                + "<div style='background-color: #fef2f2; padding: 15px; border-left: 4px solid #ef4444; margin: 20px 0;'>"
-                + "  <p style='margin: 0; margin-bottom: 8px;'><b>Tiêu đề:</b> " + title + "</p>"
-                + "  <p style='margin: 0; color: #b91c1c;'><b>Lý do từ chối:</b> "
-                + (reason != null && !reason.isEmpty() ? reason : "Không có lý do cụ thể") + "</p>"
-                + "</div>"
-                + "<p>Vui lòng liên hệ trực tiếp với người phê duyệt nếu bạn cần thêm thông tin.</p>"
-                + "<div style='text-align: center; margin: 30px 0;'>"
-                + "  <a href='https://cfcbooking.io.vn/' style='background-color: #64748b; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;'>TRỞ VỀ HỆ THỐNG</a>"
-                + "</div>";
-        sendEmail(userEmail, subject, buildHtmlTemplate(subject, content));
+    public void sendBookingRejectedEmail(String email, String resource, String title, String reason,
+            NotificationEvent.BookingEmailDetails booking) {
+        send(email, "Yêu cầu đặt " + resource + " không được chấp thuận", template.render(
+                "Yêu cầu đặt " + resource + " của bạn đã bị từ chối.",
+                "Yêu cầu không được chấp thuận", null,
+                "Yêu cầu đặt " + resource + " của bạn đã được quản trị viên xử lý.", Tone.DANGER,
+                rejectedBookingDetails(title, reason, booking),
+                "Trở về hệ thống", url("/"), "Liên hệ người phê duyệt nếu bạn cần thêm thông tin."));
     }
 
     @Async
-    public void sendProfileUpdateRequestedEmailToAdmin(String adminEmail, String requesterName, String title) {
-        String subject = "🔔 Yêu cầu cập nhật hồ sơ mới từ " + requesterName;
-        String content = "<h2>Yêu cầu cập nhật hồ sơ</h2>"
-                + "<p>Xin chào Admin,</p>"
-                + "<p>Bạn vừa nhận được một yêu cầu cập nhật hồ sơ từ <b>" + requesterName + "</b>.</p>"
-                + "<div style='background-color: #f8fafc; padding: 15px; border-left: 4px solid #3b82f6; margin: 20px 0;'>"
-                + "  <p style='margin: 0;'><b>Tiêu đề:</b> " + title + "</p>"
-                + "</div>"
-                + "<p>Vui lòng truy cập hệ thống để xem chi tiết và phê duyệt.</p>"
-                + "<div style='text-align: center; margin: 30px 0;'>"
-                + "  <a href='https://cfcbooking.io.vn/admin/profile-approvals' style='background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;'>ĐI TỚI TRANG PHÊ DUYỆT</a>"
-                + "</div>";
-        sendEmail(adminEmail, subject, buildHtmlTemplate(subject, content));
+    public void sendProfileUpdateRequestedEmailToAdmin(String email, String requester, String title) {
+        send(email, "Yêu cầu cập nhật hồ sơ mới", template.render(
+                "Có yêu cầu cập nhật hồ sơ mới đang chờ duyệt.",
+                "Yêu cầu cập nhật hồ sơ", "Admin",
+                "Một nhân viên vừa gửi yêu cầu cập nhật thông tin hồ sơ.", Tone.INFO,
+                List.of(new Detail("Người yêu cầu", requester), new Detail("Nội dung", title)),
+                "Duyệt hồ sơ", url("/admin/profile-approvals"), null));
     }
 
     @Async
-    public void sendProfileUpdateApprovedEmail(String userEmail, String title) {
-        String subject = "✅ Hồ sơ của bạn ĐÃ ĐƯỢC PHÊ DUYỆT";
-        String content = "<h2>Hồ sơ đã được phê duyệt</h2>"
-                + "<p>Xin chào,</p>"
-                + "<p>Yêu cầu cập nhật hồ sơ của bạn đã được Admin chấp thuận.</p>"
-                + "<div style='background-color: #f0fdf4; padding: 15px; border-left: 4px solid #22c55e; margin: 20px 0;'>"
-                + "  <p style='margin: 0;'><b>Nội dung:</b> " + title + "</p>"
-                + "</div>"
-                + "<p>Thông tin của bạn đã được cập nhật trong hệ thống.</p>"
-                + "<div style='text-align: center; margin: 30px 0;'>"
-                + "  <a href='https://cfcbooking.io.vn/profile' style='background-color: #22c55e; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;'>XEM HỒ SƠ</a>"
-                + "</div>";
-        sendEmail(userEmail, subject, buildHtmlTemplate(subject, content));
+    public void sendProfileUpdateApprovedEmail(String email, String title) {
+        send(email, "Hồ sơ đã được phê duyệt", template.render(
+                "Thông tin hồ sơ của bạn đã được cập nhật.", "Hồ sơ đã được phê duyệt", null,
+                "Yêu cầu cập nhật hồ sơ của bạn đã được quản trị viên chấp thuận.", Tone.SUCCESS,
+                List.of(new Detail("Nội dung", title), new Detail("Trạng thái", "Đã phê duyệt")),
+                "Xem hồ sơ", url("/profile"), null));
     }
 
     @Async
-    public void sendProfileUpdateRejectedEmail(String userEmail, String title, String reason) {
-        String subject = "❌ Yêu cầu cập nhật hồ sơ BỊ TỪ CHỐI";
-        String content = "<h2>Yêu cầu không được chấp thuận</h2>"
-                + "<p>Xin chào,</p>"
-                + "<p>Rất tiếc, yêu cầu cập nhật hồ sơ của bạn đã bị từ chối.</p>"
-                + "<div style='background-color: #fef2f2; padding: 15px; border-left: 4px solid #ef4444; margin: 20px 0;'>"
-                + "  <p style='margin: 0; margin-bottom: 8px;'><b>Nội dung:</b> " + title + "</p>"
-                + "  <p style='margin: 0; color: #b91c1c;'><b>Lý do từ chối:</b> "
-                + (reason != null && !reason.isEmpty() ? reason : "Không có lý do cụ thể") + "</p>"
-                + "</div>"
-                + "<p>Vui lòng liên hệ trực tiếp với người phê duyệt nếu bạn cần thêm thông tin.</p>"
-                + "<div style='text-align: center; margin: 30px 0;'>"
-                + "  <a href='https://cfcbooking.io.vn/profile' style='background-color: #64748b; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;'>TRỞ VỀ HỒ SƠ</a>"
-                + "</div>";
-        sendEmail(userEmail, subject, buildHtmlTemplate(subject, content));
+    public void sendProfileUpdateRejectedEmail(String email, String title, String reason) {
+        send(email, "Yêu cầu cập nhật hồ sơ không được chấp thuận", template.render(
+                "Yêu cầu cập nhật hồ sơ của bạn đã bị từ chối.",
+                "Yêu cầu không được chấp thuận", null,
+                "Quản trị viên đã xử lý yêu cầu cập nhật hồ sơ của bạn.", Tone.DANGER,
+                List.of(new Detail("Nội dung", title), new Detail("Lý do", fallbackReason(reason))),
+                "Xem hồ sơ", url("/profile"), "Liên hệ người phê duyệt nếu bạn cần thêm thông tin."));
     }
 
-    private String buildHtmlTemplate(String title, String bodyContent) {
-        return "<!DOCTYPE html>"
-                + "<html>"
-                + "<head>"
-                + "<meta charset='UTF-8'>"
-                + "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
-                + "</head>"
-                + "<body style='margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; color: #3f3f46;'>"
-                + "  <table border='0' cellpadding='0' cellspacing='0' width='100%' style='background-color: #f4f4f5; padding: 20px 0;'>"
-                + "    <tr>"
-                + "      <td align='center'>"
-                + "        <table border='0' cellpadding='0' cellspacing='0' width='100%' max-width='600' style='background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-width: 600px; width: 100%;'>"
-                + "          <tr>"
-                + "            <td style='background-color: #1e3a8a; padding: 24px; text-align: center; border-bottom: 4px solid #3b82f6;'>"
-                + "              <h1 style='color: #ffffff; margin: 0; font-size: 24px; letter-spacing: 1px;'>CFC BOOKING</h1>"
-                + "            </td>"
-                + "          </tr>"
-                + "          <tr>"
-                + "            <td style='padding: 32px 24px; font-size: 16px; line-height: 1.6; color: #334155;'>"
-                + bodyContent
-                + "            </td>"
-                + "          </tr>"
-                + "          <tr>"
-                + "            <td style='background-color: #f8fafc; padding: 20px 24px; text-align: center; border-top: 1px solid #e2e8f0;'>"
-                + "              <p style='margin: 0; font-size: 13px; color: #64748b;'>Đây là email tự động từ hệ thống CFC Booking. Vui lòng không trả lời email này.</p>"
-                + "              <p style='margin: 8px 0 0 0; font-size: 13px; color: #64748b;'>© "
-                + java.time.Year.now().getValue() + " Công ty CP Phân bón & Hóa chất Cần Thơ</p>"
-                + "            </td>"
-                + "          </tr>"
-                + "        </table>"
-                + "      </td>"
-                + "    </tr>"
-                + "  </table>"
-                + "</body>"
-                + "</html>";
+    @Async
+    public void sendAccountRegistrationPendingEmail(String email, String fullName) {
+        send(email, "Tài khoản đang chờ phê duyệt", template.render(
+                "Email đã được xác minh và tài khoản đang chờ phê duyệt.",
+                "Đăng ký đã được ghi nhận", fullName,
+                "Email của bạn đã được xác minh. Tài khoản đang chờ quản trị viên phê duyệt.", Tone.WARNING,
+                List.of(new Detail("Email", email), new Detail("Trạng thái", "Chờ phê duyệt")),
+                null, null, "Bạn sẽ nhận được email mới ngay khi tài khoản được xử lý."));
     }
 
-    private void sendEmail(String to, String subject, String htmlContent) {
+    @Async
+    public void sendAccountRegistrationApprovedEmail(String email, String fullName) {
+        send(email, "Tài khoản đã được phê duyệt", template.render(
+                "Tài khoản CFC Booking của bạn đã được kích hoạt.",
+                "Tài khoản đã được kích hoạt", fullName,
+                "Quản trị viên đã phê duyệt tài khoản. Bạn có thể đăng nhập và sử dụng hệ thống ngay.", Tone.SUCCESS,
+                List.of(new Detail("Email", email), new Detail("Trạng thái", "Đã kích hoạt")),
+                "Đăng nhập", url("/login"), null));
+    }
+
+    @Async
+    public void sendAccountRegistrationRejectedEmail(String email, String fullName, String reason) {
+        send(email, "Yêu cầu đăng ký không được chấp thuận", template.render(
+                "Yêu cầu đăng ký tài khoản của bạn không được chấp thuận.",
+                "Yêu cầu đăng ký bị từ chối", fullName,
+                "Quản trị viên đã xem xét yêu cầu đăng ký tài khoản của bạn.", Tone.DANGER,
+                List.of(new Detail("Email", email), new Detail("Lý do", fallbackReason(reason))),
+                null, null, "Vui lòng liên hệ quản trị viên nếu bạn cần thêm thông tin."));
+    }
+
+    private String fallbackReason(String reason) {
+        return reason == null || reason.isBlank() ? "Không có lý do cụ thể" : reason.trim();
+    }
+
+    private List<Detail> rejectedBookingDetails(
+            String title, String reason, NotificationEvent.BookingEmailDetails booking) {
+        List<Detail> details = bookingDetails(null, title, booking, "Bị từ chối");
+        details.add(new Detail("Lý do", fallbackReason(reason)));
+        return details;
+    }
+
+    private List<Detail> bookingDetails(
+            String requester, String title, NotificationEvent.BookingEmailDetails booking, String status) {
+        List<Detail> details = new ArrayList<>();
+        addDetail(details, "Người yêu cầu", requester);
+        addDetail(details, "Nội dung", title);
+        if (booking != null) {
+            addDetail(details, "Phòng / Xe", booking.resourceName());
+            addDetail(details, "Địa điểm", booking.location());
+            addDetail(details, "Điểm đi", booking.departure());
+            addDetail(details, "Điểm đến", booking.destination());
+            if (booking.startTime() != null) {
+                addDetail(details, "Ngày", booking.startTime().format(DATE_FORMAT));
+            }
+            if (booking.startTime() != null && booking.endTime() != null) {
+                String timeRange = booking.startTime().format(TIME_FORMAT)
+                        + " – " + booking.endTime().format(TIME_FORMAT);
+                if (!booking.startTime().toLocalDate().equals(booking.endTime().toLocalDate())) {
+                    timeRange += " ngày " + booking.endTime().format(DATE_FORMAT);
+                }
+                addDetail(details, "Thời gian", timeRange);
+            }
+        }
+        addDetail(details, "Trạng thái", status);
+        return details;
+    }
+
+    private void addDetail(List<Detail> details, String label, String value) {
+        if (value != null && !value.isBlank()) {
+            details.add(new Detail(label, value));
+        }
+    }
+
+    private String url(String path) {
+        return frontendUrl.replaceAll("/+$", "") + path;
+    }
+
+    private void send(String to, String subject, String html) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-            helper.setFrom(fromEmail);
+            MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
+            helper.setFrom(fromEmail, "CFC Booking");
             helper.setTo(to);
             helper.setSubject(subject);
-            helper.setText(htmlContent, true);
-
+            helper.setText(html, true);
             mailSender.send(message);
             log.info("Email sent successfully to {}", to);
         } catch (MessagingException e) {
-            log.error("Failed to send email to {}: {}", to, e.getMessage());
+            log.error("Failed to prepare email for {}: {}", to, e.getMessage());
         } catch (Exception e) {
             log.error("Unexpected error while sending email to {}: {}", to, e.getMessage());
         }

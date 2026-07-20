@@ -7,6 +7,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 import java.util.Optional;
+import com.booking.system.enums.UserStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface UserRepository extends JpaRepository<User, String> {
     @EntityGraph(attributePaths = "department")
@@ -19,4 +22,9 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     List<User> findByRole(RoleEnum role);
     List<User> findByRoleIn(List<RoleEnum> roles);
+
+    @EntityGraph(attributePaths = {"registrationReviewedBy"})
+    Page<User> findByStatusOrderByCreatedAtDesc(UserStatus status, Pageable pageable);
+
+    long countByStatus(UserStatus status);
 }

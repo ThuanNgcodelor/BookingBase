@@ -3,6 +3,8 @@ package com.booking.system.event;
 import com.booking.system.enums.NotificationPriority;
 import com.booking.system.enums.NotificationType;
 
+import java.time.LocalDateTime;
+
 public record NotificationEvent(
         String recipientId,
         String senderId,
@@ -26,9 +28,22 @@ public record NotificationEvent(
             String resourceType,
             String requesterName,
             String title,
-            String reason
+            String reason,
+            BookingEmailDetails bookingDetails
     ) {
+        public EmailInstruction(EmailType type, String resourceType, String requesterName, String title, String reason) {
+            this(type, resourceType, requesterName, title, reason, null);
+        }
     }
+
+    public record BookingEmailDetails(
+            String resourceName,
+            String location,
+            String departure,
+            String destination,
+            LocalDateTime startTime,
+            LocalDateTime endTime
+    ) {}
 
     public enum EmailType {
         BOOKING_CREATED_TO_ADMIN,
@@ -36,6 +51,9 @@ public record NotificationEvent(
         BOOKING_REJECTED,
         PROFILE_UPDATE_REQUESTED_TO_ADMIN,
         PROFILE_UPDATE_APPROVED,
-        PROFILE_UPDATE_REJECTED
+        PROFILE_UPDATE_REJECTED,
+        ACCOUNT_REGISTRATION_PENDING,
+        ACCOUNT_REGISTRATION_APPROVED,
+        ACCOUNT_REGISTRATION_REJECTED
     }
 }

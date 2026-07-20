@@ -1,38 +1,26 @@
-import { baseApi } from './baseApi';
-import axios from 'axios';
+import { baseApi, refreshAccessToken } from './baseApi';
 import Cookies from 'js-cookie';
 import { pushApi } from './pushApi';
 import { clearAppBadge } from '../utils/appBadge';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
-const COOKIE_OPTS = { expires: 7, sameSite: 'Strict' };
-
+import { clearAuthCookies, isInvalidRefreshError, setAuthCookies } from './authStorage';
 export const authApi = {
   setAuthData: (data) => {
-    const { accessToken, refreshToken, user } = data;
-    Cookies.set('accessToken', accessToken, { ...COOKIE_OPTS, expires: 1 / 48 });
-    Cookies.set('refreshToken', refreshToken, COOKIE_OPTS);
-    Cookies.set('user', JSON.stringify(user), COOKIE_OPTS);
+    setAuthCookies(data);
   },
 
   updateUser: (user) => {
-    Cookies.set('user', JSON.stringify(user), COOKIE_OPTS);
+    setAuthCookies({ user });
   },
 
   silentRefresh: async () => {
     const refreshToken = Cookies.get('refreshToken');
     if (!refreshToken) return false;
     try {
-      const res = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
-      const { accessToken, refreshToken: newRefreshToken, user } = res.data.data;
-      Cookies.set('accessToken', accessToken, { ...COOKIE_OPTS, expires: 1 / 48 });
-      Cookies.set('refreshToken', newRefreshToken, COOKIE_OPTS);
-      Cookies.set('user', JSON.stringify(user), COOKIE_OPTS);
+      await refreshAccessToken();
       return true;
-    } catch {
-      Cookies.remove('accessToken');
-      Cookies.remove('refreshToken');
-      Cookies.remove('user');
+    } catch (error) {
+      if (!isInvalidRefreshError(error)) throw error;
+      clearAuthCookies();
       return false;
     }
   },
@@ -54,8 +42,8 @@ export const authApi = {
     return response.data;
   },
 
-  verifyRegisterOtp: async ({ email, otp, password }) => {
-    const response = await baseApi.post('/auth/register/verify', { email, otp, password });
+  verifyRegisterOtp: async ({ email, otp, fullName, password }) => {
+    const response = await baseApi.post('/auth/register/verify', { email, otp, fullName, password });
     return response.data;
   },
 
@@ -79,9 +67,7 @@ export const authApi = {
         console.error('Logout API error:', e);
       }
     }
-    Cookies.remove('accessToken');
-    Cookies.remove('refreshToken');
-    Cookies.remove('user');
+    clearAuthCookies();
     await clearAppBadge();
   },
 

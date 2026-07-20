@@ -12,6 +12,7 @@
  * Giữ `skipWaiting` + `clients.claim` để tương thích `registerType: 'autoUpdate'`.
  */
 import { precacheAndRoute } from 'workbox-precaching';
+import { resolveNotificationTarget } from './utils/notificationNavigation';
 
 const OFFLINE_FALLBACK_URL = '/offline.html';
 
@@ -150,14 +151,7 @@ self.addEventListener('notificationclick', (event) => {
  *  - Fallback → root app.
  */
 function buildTargetUrl(payload) {
-  if (payload.targetUrl && payload.sourceId && payload.targetUrl.replace(/\/$/, '') === '/admin/approvals') {
-    return `/admin/approvals/${payload.sourceId}`;
-  }
-  if (payload.targetUrl) return payload.targetUrl;
-  if ((payload.sourceType === 'BOOKING_ROOM' || payload.sourceType === 'BOOKING_CAR') && payload.sourceId) {
-    return `/admin/approvals/${payload.sourceId}`;
-  }
-  return '/';
+  return resolveNotificationTarget(payload);
 }
 
 function normalizeNotificationTitle(payload) {

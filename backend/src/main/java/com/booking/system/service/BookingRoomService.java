@@ -110,7 +110,10 @@ public class BookingRoomService {
                             "phòng",
                             requester.getFullName(),
                             saved.getTitle(),
-                            null
+                            null,
+                            new NotificationEvent.BookingEmailDetails(
+                                    saved.getRoom().getName(), saved.getRoom().getLocation(), null, null,
+                                    saved.getStartTime(), saved.getEndTime())
                     )
             ));
         }

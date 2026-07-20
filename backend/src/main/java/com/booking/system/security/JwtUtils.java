@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.UUID;
 
 @Component
 public class JwtUtils {
@@ -18,7 +19,7 @@ public class JwtUtils {
     @Value("${jwt.access.expiration:1800000}") // 30 mins
     private long jwtAccessExpirationMs;
 
-    @Value("${jwt.refresh.expiration:604800000}") // 7 days
+    @Value("${jwt.refresh.expiration:7776000000}") // 90 days
     private long jwtRefreshExpirationMs;
 
     private SecretKey getSigningKey() {
@@ -36,13 +37,24 @@ public class JwtUtils {
                 .compact();
     }
 
-    public String generateRefreshToken(String email) {
+    public String generateRefreshToken(String email, String sessionId) {
         return Jwts.builder()
                 .subject(email)
+                .id(UUID.randomUUID().toString())
+                .claim("sid", sessionId)
                 .issuedAt(new Date())
                 .expiration(new Date((new Date()).getTime() + jwtRefreshExpirationMs))
                 .signWith(getSigningKey())
                 .compact();
+    }
+
+    public String getSessionIdFromRefreshToken(String token) {
+        return Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .get("sid", String.class);
     }
 
     public String getEmailFromJwtToken(String token) {

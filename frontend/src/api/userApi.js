@@ -29,5 +29,25 @@ export const userApi = {
   createUser: async (payload) => {
     const response = await baseApi.post('/users', payload);
     return response.data.data;
-  }
+  },
+
+  getPendingRegistrations: async (page = 0, size = 10) => {
+    const response = await baseApi.get('/users/registration-approvals', { params: { page, size } });
+    return response.data.data;
+  },
+
+  getPendingRegistrationCount: async () => {
+    const response = await baseApi.get('/users/registration-approvals/count', { _silent: true });
+    return response.data.data;
+  },
+
+  approveRegistration: async (id) => {
+    const response = await baseApi.patch(`/users/${id}/approve-registration`);
+    return response.data.data;
+  },
+
+  rejectRegistration: async (id, reason = null) => {
+    const response = await baseApi.patch(`/users/${id}/reject-registration`, { reason });
+    return response.data.data;
+  },
 };
