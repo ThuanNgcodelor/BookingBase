@@ -30,17 +30,31 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers(
+                        "/favicon.ico",
+                        "/logo*.png",
+                        "/logotitle.png",
+                        "/og-image*.png",
+                        "/robots.txt",
+                        "/sitemap.xml",
+                        "/assets/**",
+                        "/icons/**"
+                ).permitAll()
+                .requestMatchers(HttpMethod.HEAD,
+                        "/",
+                        "/index.html",
+                        "/offline.html",
+                        "/manifest.webmanifest",
+                        "/login",
+                        "/register",
+                        "/forgot-password"
+                ).permitAll()
                 .requestMatchers(HttpMethod.GET,
                         "/",
                         "/index.html",
                         "/offline.html",
                         "/manifest.webmanifest",
                         "/sw.js",
-                        "/favicon.ico",
-                        "/logo*.png",
-                        "/og-image.png",
-                        "/assets/**",
-                        "/icons/**",
                         "/login",
                         "/register",
                         "/forgot-password",

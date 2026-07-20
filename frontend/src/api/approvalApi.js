@@ -1,6 +1,11 @@
 import { baseApi } from './baseApi';
 
 export const approvalApi = {
+  getHistory: async (params = {}) => {
+    const response = await baseApi.get('/approvals/history', { params });
+    return response.data.data;
+  },
+
   getRoomApprovalSteps: async (id) => {
     const response = await baseApi.get(`/approvals/rooms/${id}/steps`);
     return response.data.data;

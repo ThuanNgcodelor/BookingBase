@@ -11,6 +11,16 @@ export const userApi = {
     return response.data.data;
   },
 
+  updateAvatar: async (avatarUrl) => {
+    const response = await baseApi.patch('/users/me/avatar', { avatarUrl });
+    return response.data.data;
+  },
+
+  changePassword: async ({ currentPassword, newPassword }) => {
+    const response = await baseApi.patch('/users/me/password', { currentPassword, newPassword });
+    return response.data;
+  },
+
   getDepartments: async () => {
     const response = await baseApi.get('/departments');
     return response.data.data;

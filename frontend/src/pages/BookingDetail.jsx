@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, User, Clock, FileText, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, User, Clock, FileText, XCircle, Ban } from 'lucide-react';
 import { bookingApi } from '../api/bookingApi';
 import { approvalApi } from '../api/approvalApi';
 import { authApi } from '../api/authApi';
@@ -17,7 +17,15 @@ function getRoleLabel(role) {
 function getActionLabel(status) {
   if (status === 'APPROVED') return 'Đã phê duyệt';
   if (status === 'REJECTED') return 'Đã từ chối';
+  if (status === 'CANCELLED') return 'Đã hủy';
   return 'Đang chờ';
+}
+
+function getStatusClass(status) {
+  if (status === 'APPROVED') return 'text-green-600';
+  if (status === 'REJECTED') return 'text-red-600';
+  if (status === 'CANCELLED') return 'text-gray-600';
+  return 'text-amber-600';
 }
 
 function buildCarTitle(request) {
@@ -37,9 +45,13 @@ export default function BookingDetail() {
   const [note, setNote] = useState('');
   const [approvalSteps, setApprovalSteps] = useState([]);
   const [showAllApprovalSteps, setShowAllApprovalSteps] = useState(false);
+  const [showCancelForm, setShowCancelForm] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const currentUser = authApi.getUser();
   const isApprover = currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER';
+  const canReject = currentUser?.role === 'ADMIN';
+  const canCancel = currentUser?.role === 'ADMIN';
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -89,7 +101,7 @@ export default function BookingDetail() {
 
   const handleApprove = async () => {
     try {
-      const payload = { approverId: currentUser.id, reason: note || 'Đồng ý duyệt' };
+      const payload = { reason: note.trim() || 'Đồng ý duyệt' };
       if (type === 'ROOM') {
         await approvalApi.approveRoom(request.id, payload);
       } else {
@@ -103,12 +115,8 @@ export default function BookingDetail() {
   };
 
   const handleReject = async () => {
-    if (!note) {
-      toast.error("Vui lòng nhập lý do từ chối vào ô bình luận!");
-      return;
-    }
     try {
-      const payload = { approverId: currentUser.id, reason: note };
+      const payload = { reason: note.trim() || null };
       if (type === 'ROOM') {
         await approvalApi.rejectRoom(request.id, payload);
       } else {
@@ -118,6 +126,29 @@ export default function BookingDetail() {
       navigate('/admin/approvals');
     } catch (e) {
       toast.error('Lỗi khi từ chối: ' + (e.response?.data?.message || e.message));
+    }
+  };
+
+  const handleCancel = async () => {
+    setCancelling(true);
+    try {
+      if (type === 'ROOM') {
+        await bookingApi.cancelRoomBooking(request.id);
+      } else {
+        await bookingApi.cancelCarBooking(request.id);
+      }
+      setRequest(current => ({
+        ...current,
+        status: 'CANCELLED',
+        cancelReason: null,
+        cancelledBy: currentUser,
+      }));
+      setShowCancelForm(false);
+      toast.success('Đã hủy booking thành công!');
+    } catch (e) {
+      toast.error('Lỗi khi hủy booking: ' + (e.response?.data?.message || e.message));
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -166,8 +197,8 @@ export default function BookingDetail() {
             </h1>
             <div className="flex items-center gap-2 text-sm">
               <span className="text-gray-500">Trạng thái:</span>
-              <span className={`font-semibold ${request.status === 'APPROVED' ? 'text-green-600' : request.status === 'REJECTED' ? 'text-red-600' : 'text-amber-600'}`}>
-                {request.status}
+              <span className={`font-semibold ${getStatusClass(request.status)}`}>
+                {getActionLabel(request.status)}
               </span>
             </div>
 
@@ -221,18 +252,18 @@ export default function BookingDetail() {
 
           {/* Action Log / Feedback */}
           <div className="bg-gray-50 p-6 flex-1 flex flex-col">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Lý do duyệt / từ chối</h3>
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Lịch sử xử lý</h3>
 
-            {request.status !== 'PENDING' && (
-              <div className={`rounded-lg border bg-white p-4 ${request.status === 'REJECTED' ? 'border-red-100' : 'border-green-100'}`}>
+            {latestApprovalStep && (
+              <div className={`rounded-lg border bg-white p-4 ${latestApprovalStep.status === 'REJECTED' ? 'border-red-100' : 'border-green-100'}`}>
                 <div className="flex items-center gap-2 text-sm font-semibold">
-                  {request.status === 'REJECTED' ? (
+                  {latestApprovalStep.status === 'REJECTED' ? (
                     <XCircle className="w-4 h-4 text-red-600" />
                   ) : (
                     <CheckCircle2 className="w-4 h-4 text-green-600" />
                   )}
-                  <span className={request.status === 'REJECTED' ? 'text-red-700' : 'text-green-700'}>
-                    {getActionLabel(latestApprovalStep?.status || request.status)}
+                  <span className={latestApprovalStep.status === 'REJECTED' ? 'text-red-700' : 'text-green-700'}>
+                    {getActionLabel(latestApprovalStep.status)}
                   </span>
                   {latestApprovalStep?.approver?.fullName && (
                     <span className="font-normal text-gray-500">
@@ -241,11 +272,22 @@ export default function BookingDetail() {
                   )}
                 </div>
                 <p className="mt-3 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                  {latestReason || (request.status === 'REJECTED' ? 'Chưa có lý do từ chối được ghi nhận.' : 'Không có ghi chú phê duyệt.')}
+                  {latestReason || (latestApprovalStep.status === 'REJECTED' ? 'Chưa có lý do từ chối được ghi nhận.' : 'Không có ghi chú phê duyệt.')}
                 </p>
                 {latestApprovalStep?.actedAt && (
                   <p className="mt-2 text-xs text-gray-400">{formatViDateTime(latestApprovalStep.actedAt)}</p>
                 )}
+              </div>
+            )}
+
+            {request.status === 'CANCELLED' && (
+              <div className="mt-3 rounded-lg border border-gray-200 bg-white p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                  <Ban className="h-4 w-4" />
+                  Đã hủy booking
+                  {request.cancelledBy?.fullName && <span className="font-normal text-gray-500">bởi {request.cancelledBy.fullName}</span>}
+                </div>
+                {request.cancelReason && <p className="mt-3 whitespace-pre-wrap text-sm text-gray-700">{request.cancelReason}</p>}
               </div>
             )}
 
@@ -256,15 +298,36 @@ export default function BookingDetail() {
                     type="text"
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
-                    placeholder="Nhập lý do duyệt hoặc từ chối..."
+                    placeholder="Nhập ghi chú (không bắt buộc)..."
                     className="flex-1 outline-none text-sm bg-transparent"
                   />
                 </div>
                 <div className="flex gap-3">
                   <Button onClick={handleApprove} className="bg-green-600 hover:bg-green-700 text-white">Phê duyệt</Button>
-                  <Button onClick={handleReject} variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">Từ chối</Button>
+                  {canReject && (
+                    <Button onClick={handleReject} variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">Từ chối</Button>
+                  )}
                 </div>
               </>
+            )}
+
+            {request.status === 'APPROVED' && canCancel && !showCancelForm && (
+              <div className="mt-4">
+                <Button variant="danger" onClick={() => setShowCancelForm(true)}>
+                  <Ban className="mr-1.5 h-4 w-4" />Hủy booking
+                </Button>
+              </div>
+            )}
+
+            {request.status === 'APPROVED' && canCancel && showCancelForm && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4">
+                <div className="font-semibold text-red-800">Bạn có chắc muốn hủy booking này?</div>
+                <p className="mt-1 text-sm text-red-700">Booking đang ở trạng thái đã phê duyệt. Sau khi hủy, lịch phòng/xe sẽ được giải phóng và người đặt sẽ nhận được thông báo.</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button variant="danger" disabled={cancelling} onClick={handleCancel}>{cancelling ? 'Đang hủy...' : 'Xác nhận hủy'}</Button>
+                  <Button variant="secondary" disabled={cancelling} onClick={() => setShowCancelForm(false)}>Giữ booking</Button>
+                </div>
+              </div>
             )}
 
             {/* Chỗ này có thể mở rộng log step sau này */}

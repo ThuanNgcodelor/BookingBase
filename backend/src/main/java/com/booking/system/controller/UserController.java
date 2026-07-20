@@ -3,12 +3,15 @@ package com.booking.system.controller;
 import com.booking.system.dto.AdminCreateUserRequest;
 import com.booking.system.dto.ApiResponse;
 import com.booking.system.dto.AuthResponse;
+import com.booking.system.dto.ChangePasswordRequest;
+import com.booking.system.dto.UpdateAvatarRequest;
 import com.booking.system.entity.Department;
 import com.booking.system.entity.User;
 import com.booking.system.enums.RoleEnum;
 import com.booking.system.enums.UserStatus;
 import com.booking.system.repository.DepartmentRepository;
 import com.booking.system.repository.UserRepository;
+import com.booking.system.service.UserProfileService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +19,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,11 +35,38 @@ public class UserController {
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserProfileService userProfileService;
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<AuthResponse.UserDto>> me(@AuthenticationPrincipal User user) {
         User current = requireUser(user);
         return ResponseEntity.ok(ApiResponse.success(toUserDto(current), "Lấy thông tin người dùng thành công"));
+    }
+
+    @PatchMapping("/me/avatar")
+    public ResponseEntity<ApiResponse<AuthResponse.UserDto>> updateAvatar(
+            @AuthenticationPrincipal User user,
+            @Valid @RequestBody UpdateAvatarRequest request
+    ) {
+        try {
+            User updated = userProfileService.updateAvatar(requireUser(user).getId(), request.avatarUrl());
+            return ResponseEntity.ok(ApiResponse.success(toUserDto(updated), "Cập nhật ảnh đại diện thành công"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(400, e.getMessage()));
+        }
+    }
+
+    @PatchMapping("/me/password")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+            @AuthenticationPrincipal User user,
+            @Valid @RequestBody ChangePasswordRequest request
+    ) {
+        try {
+            userProfileService.changePassword(requireUser(user).getId(), request.currentPassword(), request.newPassword());
+            return ResponseEntity.ok(ApiResponse.success(null, "Đổi mật khẩu thành công"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(400, e.getMessage()));
+        }
     }
 
     @GetMapping("/approvers")

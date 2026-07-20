@@ -21,6 +21,8 @@ export default function Profile() {
   const fileInputRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [avatarSaving, setAvatarSaving] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
   const [user, setUser] = useState(authApi.getUser() || {});
   const [departments, setDepartments] = useState([]);
   const [latestRequest, setLatestRequest] = useState(null);
@@ -30,6 +32,11 @@ export default function Profile() {
     avatarUrl: '',
     departmentId: '',
     position: '',
+  });
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
   });
 
   useEffect(() => {
@@ -107,6 +114,57 @@ export default function Profile() {
     }
   };
 
+  const handleAvatarSave = async () => {
+    if (!form.avatarUrl || form.avatarUrl === user.avatarUrl) {
+      toast.error('Vui lòng chọn một ảnh đại diện mới');
+      return;
+    }
+
+    setAvatarSaving(true);
+    try {
+      const updatedUser = await userApi.updateAvatar(form.avatarUrl);
+      setUser(updatedUser);
+      setForm((prev) => ({ ...prev, avatarUrl: updatedUser.avatarUrl || '' }));
+      authApi.updateUser(updatedUser);
+      toast.success('Đã cập nhật ảnh đại diện');
+    } catch (error) {
+      toast.error(error.response?.data?.message || error.message || 'Cập nhật ảnh đại diện thất bại');
+    } finally {
+      setAvatarSaving(false);
+    }
+  };
+
+  const handlePasswordSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!passwordForm.currentPassword) {
+      toast.error('Vui lòng nhập mật khẩu hiện tại');
+      return;
+    }
+    if (passwordForm.newPassword.length < 6) {
+      toast.error('Mật khẩu mới phải có ít nhất 6 ký tự');
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.error('Mật khẩu xác nhận không khớp');
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      await userApi.changePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      toast.success('Đổi mật khẩu thành công');
+    } catch (error) {
+      toast.error(error.response?.data?.message || error.message || 'Đổi mật khẩu thất bại');
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -134,7 +192,6 @@ export default function Profile() {
     try {
       const submitted = await profileRequestApi.submit({
         fullName: form.fullName.trim(),
-        avatarUrl: form.avatarUrl || null,
         departmentId: form.departmentId,
         position: form.position,
       });
@@ -223,6 +280,16 @@ export default function Profile() {
                   <div className="mt-1 break-all text-gray-900">{user.email}</div>
                 </div>
               </div>
+
+              <Button
+                type="button"
+                className="mt-4 w-full"
+                onClick={handleAvatarSave}
+                disabled={avatarSaving || !form.avatarUrl || form.avatarUrl === user.avatarUrl}
+              >
+                {avatarSaving ? 'Đang lưu ảnh...' : 'Lưu ảnh đại diện'}
+              </Button>
+              <p className="mt-2 text-xs text-gray-500">Ảnh đại diện được cập nhật ngay, không cần admin phê duyệt.</p>
             </div>
           </div>
         </div>
@@ -296,6 +363,56 @@ export default function Profile() {
             <div className="mt-6 flex items-center justify-end gap-3 sm:mt-8">
               <Button type="submit" disabled={submitting || hasPendingRequest}>
                 {submitting ? 'Đang gửi...' : hasPendingRequest ? 'Đang chờ duyệt' : 'Gửi yêu cầu cập nhật'}
+              </Button>
+            </div>
+          </form>
+
+          <form onSubmit={handlePasswordSubmit} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6 lg:p-8">
+            <h3 className="text-base font-semibold text-gray-900 sm:text-lg">Đổi mật khẩu</h3>
+            <p className="mt-1 text-sm text-gray-500">Nhập mật khẩu hiện tại để xác nhận thay đổi.</p>
+
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+              <div className="sm:col-span-2">
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">Mật khẩu hiện tại</label>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={passwordForm.currentPassword}
+                  onChange={(event) => setPasswordForm((prev) => ({ ...prev, currentPassword: event.target.value }))}
+                  className="w-full rounded-md border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">Mật khẩu mới</label>
+                <input
+                  type="password"
+                  minLength={6}
+                  maxLength={100}
+                  autoComplete="new-password"
+                  value={passwordForm.newPassword}
+                  onChange={(event) => setPasswordForm((prev) => ({ ...prev, newPassword: event.target.value }))}
+                  className="w-full rounded-md border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">Xác nhận mật khẩu mới</label>
+                <input
+                  type="password"
+                  minLength={6}
+                  maxLength={100}
+                  autoComplete="new-password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(event) => setPasswordForm((prev) => ({ ...prev, confirmPassword: event.target.value }))}
+                  className="w-full rounded-md border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <Button type="submit" disabled={passwordSaving}>
+                {passwordSaving ? 'Đang đổi mật khẩu...' : 'Đổi mật khẩu'}
               </Button>
             </div>
           </form>

@@ -63,19 +63,19 @@ export default function AdminProfileApprovalDetail() {
     }
   };
 
-  const renderAvatar = (avatarUrl, name) => {
+  const renderAvatar = (avatarUrl, name, sizeClass = 'h-12 w-12') => {
     if (avatarUrl) {
       return (
         <img
           src={avatarUrl}
           alt={name}
           referrerPolicy="no-referrer"
-          className="h-12 w-12 rounded-full object-cover border border-gray-200"
+          className={`${sizeClass} rounded-full object-cover border border-gray-200`}
         />
       );
     }
     return (
-      <div className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-200 bg-blue-100 text-sm font-semibold text-blue-700">
+      <div className={`flex ${sizeClass} items-center justify-center rounded-full border border-gray-200 bg-blue-100 text-sm font-semibold text-blue-700`}>
         {(name || 'U').charAt(0).toUpperCase()}
       </div>
     );
@@ -141,7 +141,9 @@ export default function AdminProfileApprovalDetail() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-6">
               <div className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-gray-200 shrink-0 mt-0.5"></div>
+                <div className="shrink-0">
+                  {renderAvatar(request.requester?.avatarUrl, request.requester?.fullName || request.currentFullName)}
+                </div>
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Người tạo</p>
                   <p className="text-sm font-medium text-gray-900">{request.requester?.fullName || request.currentFullName}</p>
@@ -180,16 +182,10 @@ export default function AdminProfileApprovalDetail() {
               {renderField('Chức vụ', request.currentPosition, request.requestedPosition)}
 
               <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Avatar</div>
-                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <div className="text-[11px] uppercase tracking-wide text-gray-400">Hiện tại</div>
-                    <div className="mt-2">{renderAvatar(request.currentAvatarUrl, request.currentFullName)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[11px] uppercase tracking-wide text-blue-500">Đề nghị</div>
-                    <div className="mt-2">{renderAvatar(request.requestedAvatarUrl, request.requestedFullName)}</div>
-                  </div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Ảnh đại diện hiện tại</div>
+                <div className="mt-3 flex items-center gap-3">
+                  {renderAvatar(request.requester?.avatarUrl, request.requester?.fullName || request.currentFullName)}
+                  <p className="text-xs leading-5 text-gray-500">Ảnh đại diện được người dùng cập nhật trực tiếp và không thuộc nội dung cần phê duyệt.</p>
                 </div>
               </div>
 
@@ -224,8 +220,8 @@ export default function AdminProfileApprovalDetail() {
             <div className="space-y-3">
               <div className="flex items-start justify-between bg-white p-3 border border-gray-100 rounded shadow-sm">
                 <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-xs font-bold text-green-600">
-                    {currentUser?.fullName?.charAt(0) || 'A'}
+                  <div className="shrink-0">
+                    {renderAvatar(currentUser?.avatarUrl, currentUser?.fullName || 'Admin', 'h-8 w-8')}
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-gray-900">{currentUser?.fullName}</p>

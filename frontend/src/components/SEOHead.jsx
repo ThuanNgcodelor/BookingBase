@@ -11,7 +11,7 @@ import { Helmet } from 'react-helmet-async';
 export default function SEOHead({
   title = 'CFC Booking | Hệ thống đặt phòng họp & xe nội bộ',
   description = 'CFC Booking - Hệ thống đặt phòng họp và xe công nội bộ của CFC. Đặt lịch nhanh chóng, tiện lợi, quản lý tập trung.',
-  image = 'https://cfcbooking.io.vn/og-image.png',
+  image = 'https://cfcbooking.io.vn/og-image-20260717.png',
   url = 'https://cfcbooking.io.vn/',
   noIndex = false,
 }) {
@@ -30,6 +30,10 @@ export default function SEOHead({
       <meta property="og:title" content={fullTitle} />
       <meta property="og:description" content={description} />
       <meta property="og:image" content={image} />
+      <meta property="og:image:secure_url" content={image} />
+      <meta property="og:image:type" content="image/png" />
+      <meta property="og:image:width" content="1024" />
+      <meta property="og:image:height" content="1024" />
       <meta property="og:url" content={url} />
 
       {/* Twitter */}

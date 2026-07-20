@@ -6,6 +6,7 @@ import com.booking.system.entity.BookingCar;
 import com.booking.system.entity.BookingRoom;
 import com.booking.system.entity.User;
 import com.booking.system.enums.ApprovalStatus;
+import com.booking.system.enums.BookingStatus;
 import com.booking.system.enums.NotificationType;
 import com.booking.system.enums.RoleEnum;
 import com.booking.system.event.NotificationEvent;
@@ -25,10 +26,13 @@ import org.springframework.security.access.AccessDeniedException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -128,7 +132,7 @@ class ApprovalServiceTest {
     @Test
     void rejectRoomUsesLegacyNoteAsReasonWhenReasonIsMissing() {
         User requester = user("user-1", "Nhan vien", RoleEnum.EMPLOYEE);
-        User approver = user("manager-1", "Manager", RoleEnum.MANAGER);
+        User approver = user("admin-1", "Admin", RoleEnum.ADMIN);
         BookingRoom booking = bookingRoom("booking-room-1", requester);
         ApprovalRequest request = new ApprovalRequest();
         request.setApproverId("spoofed-admin-id");
@@ -153,6 +157,43 @@ class ApprovalServiceTest {
     }
 
     @Test
+    void rejectRoomAllowsAdminWithoutReason() {
+        User requester = user("user-1", "Nhan vien", RoleEnum.EMPLOYEE);
+        User admin = user("admin-1", "Admin", RoleEnum.ADMIN);
+        BookingRoom booking = bookingRoom("booking-room-1", requester);
+        ApprovalRequest request = new ApprovalRequest();
+
+        when(bookingRoomRepository.findById(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findById(admin.getId())).thenReturn(Optional.of(admin));
+
+        approvalService.rejectRoom(booking.getId(), request, admin);
+
+        ArgumentCaptor<ApprovalStep> stepCaptor = ArgumentCaptor.forClass(ApprovalStep.class);
+        verify(approvalStepRepository).save(stepCaptor.capture());
+        assertThat(stepCaptor.getValue().getReason()).isNull();
+
+        ArgumentCaptor<NotificationEvent> eventCaptor = ArgumentCaptor.forClass(NotificationEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().message()).doesNotContain("Lý do:").doesNotContain("null");
+        assertThat(eventCaptor.getValue().emailInstruction().reason()).isNull();
+    }
+
+    @Test
+    void rejectRoomRejectsManager() {
+        User requester = user("user-1", "Nhan vien", RoleEnum.EMPLOYEE);
+        User manager = user("manager-1", "Manager", RoleEnum.MANAGER);
+        BookingRoom booking = bookingRoom("booking-room-1", requester);
+
+        assertThatThrownBy(() -> approvalService.rejectRoom(booking.getId(), new ApprovalRequest(), manager))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verify(bookingRoomRepository, never()).findById(any());
+        verify(bookingRoomRepository, never()).save(any());
+        verify(approvalStepRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
     void getRoomApprovalStepsReturnsReasonAndAuthenticatedApprover() {
         User approver = user("manager-1", "Manager", RoleEnum.MANAGER);
         ApprovalStep step = new ApprovalStep();
@@ -171,6 +212,31 @@ class ApprovalServiceTest {
         assertThat(steps.get(0).getReason()).isEqualTo("Khong phu hop");
         assertThat(steps.get(0).getApprover().getId()).isEqualTo(approver.getId());
         assertThat(steps.get(0).getStatus()).isEqualTo(ApprovalStatus.REJECTED);
+    }
+
+    @Test
+    void getHistoryAllowsManagerAndUsesServerSidePagination() {
+        User manager = user("manager-1", "Manager", RoleEnum.MANAGER);
+        PageRequest pageable = PageRequest.of(1, 20);
+        when(approvalStepRepository.findHistory("ROOM", BookingStatus.APPROVED, "nguyen", null, null, false, pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        var result = approvalService.getHistory(
+                manager, "room", BookingStatus.APPROVED, "  nguyen  ", null, null, false, pageable);
+
+        assertThat(result.getContent()).isEmpty();
+        verify(approvalStepRepository).findHistory("ROOM", BookingStatus.APPROVED, "nguyen", null, null, false, pageable);
+    }
+
+    @Test
+    void getHistoryRejectsEmployeeBeforeQueryingRepository() {
+        User employee = user("employee-1", "Employee", RoleEnum.EMPLOYEE);
+
+        assertThatThrownBy(() -> approvalService.getHistory(
+                employee, "ALL", null, null, null, null, false, PageRequest.of(0, 20)))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verify(approvalStepRepository, never()).findHistory(any(), any(), any(), any(), any(), anyBoolean(), any());
     }
 
     private BookingRoom bookingRoom(String id, User requester) {

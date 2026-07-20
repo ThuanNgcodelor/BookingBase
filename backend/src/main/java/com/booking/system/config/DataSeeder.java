@@ -18,6 +18,7 @@ import com.booking.system.repository.VehicleRepository;
 import com.booking.system.repository.VehicleTypeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +29,7 @@ import java.util.Date;
 
 @Component
 @RequiredArgsConstructor
+@Order(1)
 public class DataSeeder implements CommandLineRunner {
 
     private final UserRepository userRepository;
@@ -42,7 +44,7 @@ public class DataSeeder implements CommandLineRunner {
     @Transactional
     public void run(String... args) throws Exception {
         User duy = createAdminIfNotExists("cfcbooking@gmail.com", "Admin CFC", "admin123@");
-        createAdminIfNotExists("dienpm@gmail.com", "Phan Thị Minh Diễn", "admin123@");
+        createAdminIfNotExists("dienpm@gmail.com", "Phan Thị Minh Diễn", "123456");
 
         seedDepartments();
         Room pTruyenThong = seedRooms();

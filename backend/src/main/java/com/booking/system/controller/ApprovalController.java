@@ -14,6 +14,13 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.format.annotation.DateTimeFormat;
+import com.booking.system.dto.ApprovalHistoryResponse;
+import com.booking.system.enums.BookingStatus;
 
 @RestController
 @RequestMapping("/api/v1/approvals")
@@ -21,6 +28,34 @@ import java.util.List;
 public class ApprovalController {
 
     private final ApprovalService approvalService;
+
+    @GetMapping("/history")
+    public ResponseEntity<ApiResponse<Page<ApprovalHistoryResponse>>> getHistory(
+            @AuthenticationPrincipal User user,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) BookingStatus status,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "desc") String direction) {
+        try {
+            PageRequest pageable = PageRequest.of(
+                    Math.max(page, 0),
+                    Math.min(Math.max(size, 1), 50));
+            LocalDateTime fromTime = from == null ? null : from.atStartOfDay();
+            LocalDateTime toTime = to == null ? null : to.plusDays(1).atStartOfDay();
+            return ResponseEntity.ok(ApiResponse.success(
+                    approvalService.getHistory(user, type, status, keyword, fromTime, toTime,
+                            "asc".equalsIgnoreCase(direction), pageable),
+                    "Lấy lịch sử xử lý thành công"));
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(403, e.getMessage()));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(400, e.getMessage()));
+        }
+    }
 
     @GetMapping("/rooms/{id}/steps")
     public ResponseEntity<ApiResponse<List<ApprovalStepResponse>>> getRoomApprovalSteps(@PathVariable String id) {

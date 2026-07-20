@@ -10,6 +10,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -64,10 +66,15 @@ public class BookingCarController {
     }
 
     @PostMapping("/{id}/cancel")
-    public ResponseEntity<ApiResponse<Void>> cancelBooking(@PathVariable String id, @Valid @RequestBody com.booking.system.dto.CancelRequest request) {
+    public ResponseEntity<ApiResponse<Void>> cancelBooking(
+            @AuthenticationPrincipal User user,
+            @PathVariable String id,
+            @Valid @RequestBody com.booking.system.dto.CancelRequest request) {
         try {
-            bookingCarService.cancelBooking(id, request);
+            bookingCarService.cancelBooking(id, request, user);
             return ResponseEntity.ok(ApiResponse.success(null, "Đã hủy lịch đặt xe thành công"));
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(403, e.getMessage()));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(400, e.getMessage()));
         }

@@ -25,5 +25,15 @@ export const bookingApi = {
   createCarBooking: async (data) => {
     const response = await baseApi.post('/bookings/cars', data);
     return response.data.data;
-  }
+  },
+
+  cancelRoomBooking: async (id) => {
+    const response = await baseApi.post(`/bookings/rooms/${id}/cancel`, {});
+    return response.data;
+  },
+
+  cancelCarBooking: async (id) => {
+    const response = await baseApi.post(`/bookings/cars/${id}/cancel`, {});
+    return response.data;
+  },
 };

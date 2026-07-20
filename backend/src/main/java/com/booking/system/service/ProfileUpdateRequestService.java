@@ -47,11 +47,9 @@ public class ProfileUpdateRequestService {
                 .orElseThrow(() -> new RuntimeException("Phòng ban không tồn tại"));
 
         String requestedFullName = request.getFullName().trim();
-        String requestedAvatarUrl = StringUtils.hasText(request.getAvatarUrl()) ? request.getAvatarUrl().trim() : null;
         String requestedPosition = request.getPosition().trim();
 
         if (requestedFullName.equalsIgnoreCase(requester.getFullName())
-                && safeEquals(requestedAvatarUrl, requester.getAvatarUrl())
                 && safeEquals(department.getId(), requester.getDepartment() == null ? null : requester.getDepartment().getId())
                 && safeEquals(requestedPosition, requester.getJobPosition())) {
             throw new RuntimeException("Thông tin mới trùng với thông tin hiện tại");
@@ -60,11 +58,11 @@ public class ProfileUpdateRequestService {
         ProfileUpdateRequest profileUpdateRequest = new ProfileUpdateRequest();
         profileUpdateRequest.setRequester(requester);
         profileUpdateRequest.setCurrentFullName(requester.getFullName());
-        profileUpdateRequest.setCurrentAvatarUrl(requester.getAvatarUrl());
+        profileUpdateRequest.setCurrentAvatarUrl(null);
         profileUpdateRequest.setCurrentDepartmentName(requester.getDepartment() == null ? null : requester.getDepartment().getName());
         profileUpdateRequest.setCurrentPosition(requester.getJobPosition());
         profileUpdateRequest.setRequestedFullName(requestedFullName);
-        profileUpdateRequest.setRequestedAvatarUrl(requestedAvatarUrl);
+        profileUpdateRequest.setRequestedAvatarUrl(null);
         profileUpdateRequest.setRequestedDepartment(department);
         profileUpdateRequest.setRequestedPosition(requestedPosition);
         profileUpdateRequest.setStatus(ProfileUpdateRequestStatus.PENDING);
@@ -105,7 +103,6 @@ public class ProfileUpdateRequestService {
 
         User requester = profileUpdateRequest.getRequester();
         requester.setFullName(profileUpdateRequest.getRequestedFullName());
-        requester.setAvatarUrl(profileUpdateRequest.getRequestedAvatarUrl());
         requester.setDepartment(profileUpdateRequest.getRequestedDepartment());
         requester.setJobPosition(profileUpdateRequest.getRequestedPosition());
         userRepository.save(requester);

@@ -2,6 +2,7 @@ package com.booking.system.service;
 
 import com.booking.system.dto.ApprovalRequest;
 import com.booking.system.dto.ApprovalStepResponse;
+import com.booking.system.dto.ApprovalHistoryResponse;
 import com.booking.system.entity.ApprovalStep;
 import com.booking.system.entity.BookingCar;
 import com.booking.system.entity.BookingRoom;
@@ -24,6 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +37,24 @@ public class ApprovalService {
     private final UserRepository userRepository;
     private final ApprovalStepRepository approvalStepRepository;
     private final ApplicationEventPublisher eventPublisher;
+
+    @Transactional(readOnly = true)
+    public Page<ApprovalHistoryResponse> getHistory(
+            User principal,
+            String type,
+            BookingStatus status,
+            String keyword,
+            LocalDateTime fromTime,
+            LocalDateTime toTime,
+            boolean ascending,
+            Pageable pageable) {
+        requireApproverId(principal);
+        String normalizedType = normalizeType(type);
+        String normalizedKeyword = keyword == null || keyword.isBlank() ? null : keyword.trim();
+        return approvalStepRepository.findHistory(
+                        normalizedType, status, normalizedKeyword, fromTime, toTime, ascending, pageable)
+                .map(ApprovalHistoryResponse::from);
+    }
 
     @Transactional(readOnly = true)
     public List<ApprovalStepResponse> getRoomApprovalSteps(String bookingId) {
@@ -87,15 +108,17 @@ public class ApprovalService {
 
     @Transactional
     public void rejectRoom(String bookingId, ApprovalRequest request, User approverPrincipal) {
+        String approverId = requireAdminId(approverPrincipal);
         BookingRoom booking = bookingRoomRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy lịch đặt phòng"));
-        User approver = userRepository.findById(requireApproverId(approverPrincipal))
+        User approver = userRepository.findById(approverId)
                 .orElseThrow(() -> new RuntimeException("Người duyệt không tồn tại"));
+        String reason = normalizeReason(request.getEffectiveReason());
 
         booking.setStatus(BookingStatus.REJECTED);
         bookingRoomRepository.save(booking);
 
-        saveApprovalStep(approver, booking, null, ApprovalStatus.REJECTED, request.getEffectiveReason());
+        saveApprovalStep(approver, booking, null, ApprovalStatus.REJECTED, reason);
         
         if (!approver.getId().equals(booking.getRequester().getId())) {
             eventPublisher.publishEvent(new NotificationEvent(
@@ -103,7 +126,7 @@ public class ApprovalService {
                     approver.getId(),
                     NotificationType.BOOKING_REJECTED,
                     "Yêu cầu đặt phòng bị từ chối",
-                    "Lịch đặt phòng '" + booking.getTitle() + "' bị từ chối. Lý do: " + request.getEffectiveReason(),
+                    buildRejectionMessage("Lịch đặt phòng '" + booking.getTitle() + "' bị từ chối.", reason),
                     "/rooms",
                     "BOOKING_ROOM",
                     booking.getId(),
@@ -113,7 +136,7 @@ public class ApprovalService {
                             "phòng",
                             null,
                             booking.getTitle(),
-                            request.getEffectiveReason()
+                            reason
                     )
             ));
         }
@@ -155,15 +178,17 @@ public class ApprovalService {
 
     @Transactional
     public void rejectCar(String bookingId, ApprovalRequest request, User approverPrincipal) {
+        String approverId = requireAdminId(approverPrincipal);
         BookingCar booking = bookingCarRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy lịch đặt xe"));
-        User approver = userRepository.findById(requireApproverId(approverPrincipal))
+        User approver = userRepository.findById(approverId)
                 .orElseThrow(() -> new RuntimeException("Người duyệt không tồn tại"));
+        String reason = normalizeReason(request.getEffectiveReason());
 
         booking.setStatus(BookingStatus.REJECTED);
         bookingCarRepository.save(booking);
 
-        saveApprovalStep(approver, null, booking, ApprovalStatus.REJECTED, request.getEffectiveReason());
+        saveApprovalStep(approver, null, booking, ApprovalStatus.REJECTED, reason);
         
         if (!approver.getId().equals(booking.getRequester().getId())) {
             eventPublisher.publishEvent(new NotificationEvent(
@@ -171,7 +196,7 @@ public class ApprovalService {
                     approver.getId(),
                     NotificationType.BOOKING_REJECTED,
                     "Yêu cầu đặt xe bị từ chối",
-                    "Lịch đặt xe từ '" + booking.getDeparture() + "' đi '" + booking.getDestination() + "' bị từ chối. Lý do: " + request.getEffectiveReason(),
+                    buildRejectionMessage("Lịch đặt xe từ '" + booking.getDeparture() + "' đi '" + booking.getDestination() + "' bị từ chối.", reason),
                     "/cars",
                     "BOOKING_CAR",
                     booking.getId(),
@@ -181,7 +206,7 @@ public class ApprovalService {
                             "xe",
                             null,
                             booking.getDeparture() + " - " + booking.getDestination(),
-                            request.getEffectiveReason()
+                            reason
                     )
             ));
         }
@@ -195,6 +220,33 @@ public class ApprovalService {
             throw new AccessDeniedException("Only ADMIN or MANAGER can approve requests");
         }
         return principal.getId();
+    }
+
+    private String requireAdminId(User principal) {
+        if (principal == null || principal.getId() == null || principal.getId().isBlank()) {
+            throw new AccessDeniedException("Unauthenticated");
+        }
+        if (principal.getRole() != RoleEnum.ADMIN) {
+            throw new AccessDeniedException("Only ADMIN can reject requests");
+        }
+        return principal.getId();
+    }
+
+    private String normalizeType(String type) {
+        if (type == null || type.isBlank() || "ALL".equalsIgnoreCase(type)) return null;
+        String normalized = type.trim().toUpperCase();
+        if (!"ROOM".equals(normalized) && !"CAR".equals(normalized)) {
+            throw new IllegalArgumentException("Loại yêu cầu chỉ nhận ROOM, CAR hoặc ALL");
+        }
+        return normalized;
+    }
+
+    private String normalizeReason(String reason) {
+        return reason == null || reason.isBlank() ? null : reason.trim();
+    }
+
+    private String buildRejectionMessage(String message, String reason) {
+        return reason == null ? message : message + " Lý do: " + reason;
     }
 
     private void saveApprovalStep(User approver, BookingRoom room, BookingCar car, ApprovalStatus status, String reason) {

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { LogOut, Home, CalendarRange, CarFront, Bell, CheckSquare, Settings, Menu, FileCheck2, Users } from 'lucide-react';
 import { authApi } from '../api/authApi';
+import { userApi } from '../api/userApi';
 import { NotificationProvider } from '../contexts/NotificationContext';
 import { useNotificationList, useNotificationUnreadCount } from '../contexts/useNotificationCenter';
 import { usePushNotifications } from '../hooks/usePushNotifications';
@@ -21,13 +22,34 @@ function DashboardLayoutContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
   const [imageError, setImageError] = useState(false);
   const [collapsedImageError, setCollapsedImageError] = useState(false);
+  const [user, setUser] = useState(() => authApi.getUser() || {});
 
-  // Đọc User thật từ Cookie
-  const user = authApi.getUser() || {};
   const isAdmin = user.role === 'ADMIN';
   const isApprover = user.role === 'ADMIN' || user.role === 'MANAGER';
 
   const pushState = usePushNotifications({ autoRegister: true });
+
+  // JWT chỉ giữ identity/role. Luôn đồng bộ profile mới nhất từ backend
+  // để login email và cookie cũ vẫn có fullName/avatar chính xác.
+  useEffect(() => {
+    let active = true;
+
+    userApi.getMe()
+      .then((currentUser) => {
+        if (!active || !currentUser) return;
+        setUser(currentUser);
+        authApi.updateUser(currentUser);
+        setImageError(false);
+        setCollapsedImageError(false);
+      })
+      .catch((error) => {
+        console.error('Không thể đồng bộ thông tin người dùng:', error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Tự động đóng sidebar trên mobile khi đổi trang
   useEffect(() => {
@@ -154,11 +176,8 @@ function DashboardLayoutContent() {
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate hover:text-blue-700 transition-colors">{user.fullName}</p>
-                  <p className="text-[11px] text-gray-500 truncate">
-                    {user.departmentName || user.department || ''}
-                    {user.departmentName || user.department ? ' · ' : ''}
-                    {user.position || user.jobPosition || (user.role === 'ADMIN' ? 'Quản trị viên' : 'Nhân viên')}
+                  <p className="text-sm font-medium text-gray-900 truncate hover:text-blue-700 transition-colors">
+                    {user.fullName || user.email || 'Người dùng'}
                   </p>
                 </div>
               </div>

@@ -1,11 +1,13 @@
 package com.booking.system.service;
 
 import com.booking.system.dto.BookingRoomRequest;
+import com.booking.system.dto.CancelRequest;
 import com.booking.system.entity.BookingRoom;
 import com.booking.system.entity.Room;
 import com.booking.system.entity.User;
 import com.booking.system.enums.NotificationType;
 import com.booking.system.enums.RoleEnum;
+import com.booking.system.enums.BookingStatus;
 import com.booking.system.enums.RoomStatus;
 import com.booking.system.event.NotificationEvent;
 import com.booking.system.repository.BookingRoomRepository;
@@ -24,9 +26,11 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class BookingRoomServiceTest {
@@ -116,6 +120,50 @@ class BookingRoomServiceTest {
         BookingRoom saved = bookingRoomService.createBooking(request, requester);
 
         assertThat(saved.getRequester().getId()).isEqualTo(requester.getId());
+    }
+
+    @Test
+    void adminCancelsApprovedRoomUsingAuthenticatedPrincipal() {
+        User requester = user("user-1", "Nhân viên", RoleEnum.EMPLOYEE);
+        User admin = user("admin-1", "Admin", RoleEnum.ADMIN);
+        BookingRoom booking = new BookingRoom();
+        booking.setId("booking-room-1");
+        booking.setTitle("Họp khách hàng");
+        booking.setRequester(requester);
+        booking.setStatus(BookingStatus.APPROVED);
+        CancelRequest request = new CancelRequest();
+        request.setCancellerId("spoofed-user");
+
+        when(userRepository.findById(admin.getId())).thenReturn(Optional.of(admin));
+        when(bookingRoomRepository.findById(booking.getId())).thenReturn(Optional.of(booking));
+
+        bookingRoomService.cancelBooking(booking.getId(), request, admin);
+
+        assertThat(booking.getStatus()).isEqualTo(BookingStatus.CANCELLED);
+        assertThat(booking.getCancelledBy()).isSameAs(admin);
+        assertThat(booking.getCancelReason()).isNull();
+        assertThat(booking.getCancelledAt()).isNotNull();
+        verify(bookingRoomRepository).save(booking);
+    }
+
+    @Test
+    void employeeCannotCancelAnotherUsersRoomUsingSpoofedCancellerId() {
+        User requester = user("user-1", "Người đặt", RoleEnum.EMPLOYEE);
+        User attacker = user("user-2", "Người khác", RoleEnum.EMPLOYEE);
+        BookingRoom booking = new BookingRoom();
+        booking.setId("booking-room-1");
+        booking.setRequester(requester);
+        booking.setStatus(BookingStatus.APPROVED);
+        CancelRequest request = new CancelRequest();
+        request.setCancellerId(requester.getId());
+
+        when(userRepository.findById(attacker.getId())).thenReturn(Optional.of(attacker));
+        when(bookingRoomRepository.findById(booking.getId())).thenReturn(Optional.of(booking));
+
+        assertThatThrownBy(() -> bookingRoomService.cancelBooking(booking.getId(), request, attacker))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verify(bookingRoomRepository, never()).save(any());
     }
 
     private User user(String id, String fullName, RoleEnum role) {

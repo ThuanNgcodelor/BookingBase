@@ -29,7 +29,8 @@ public class User {
     @Column(name = "password")
     private String password;
     
-    @Column(name = "avatar_url", length = 1000)
+    @Lob
+    @Column(name = "avatar_url", columnDefinition = "MEDIUMTEXT")
     private String avatarUrl;
 
     @Column(name = "job_position")

@@ -11,10 +11,12 @@ import com.booking.system.repository.BookingCarRepository;
 import com.booking.system.repository.VehicleRepository;
 import com.booking.system.repository.UserRepository;
 import com.booking.system.enums.NotificationType;
+import com.booking.system.enums.RoleEnum;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -122,20 +124,24 @@ public class BookingCarService {
     }
 
     @Transactional
-    public void cancelBooking(String bookingId, com.booking.system.dto.CancelRequest request) {
+    public void cancelBooking(String bookingId, com.booking.system.dto.CancelRequest request, User cancellerPrincipal) {
+        User canceller = userRepository.findById(requirePrincipalId(cancellerPrincipal))
+                .orElseThrow(() -> new AccessDeniedException("Người hủy không tồn tại"));
         BookingCar booking = bookingCarRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy lịch đặt xe"));
-        
+
+        requireCancellationPermission(canceller, booking.getRequester());
         if (booking.getStatus() == BookingStatus.CANCELLED) {
             throw new RuntimeException("Lịch đặt xe này đã bị hủy trước đó");
         }
-
-        User canceller = userRepository.findById(request.getCancellerId())
-                .orElseThrow(() -> new RuntimeException("Người hủy không tồn tại"));
-
+        if (booking.getStatus() != BookingStatus.PENDING && booking.getStatus() != BookingStatus.APPROVED) {
+            throw new RuntimeException("Chỉ có thể hủy lịch đang chờ duyệt hoặc đã được duyệt");
+        }
+        String reason = normalizeCancellationReason(request.getReason());
         booking.setStatus(BookingStatus.CANCELLED);
-        booking.setCancelReason(request.getReason());
+        booking.setCancelReason(reason);
         booking.setCancelledBy(canceller);
+        booking.setCancelledAt(LocalDateTime.now());
         
         bookingCarRepository.save(booking);
 
@@ -146,7 +152,7 @@ public class BookingCarService {
                     canceller.getId(),
                     NotificationType.BOOKING_CANCELLED,
                     "Lịch đặt xe đã bị hủy",
-                    "Lịch đặt xe từ '" + booking.getDeparture() + "' đi '" + booking.getDestination() + "' đã bị hủy. Lý do: " + request.getReason(),
+                    buildCancellationMessage("Lịch đặt xe từ '" + booking.getDeparture() + "' đi '" + booking.getDestination() + "' đã bị hủy.", reason),
                     "/cars",
                     "BOOKING_CAR",
                     booking.getId(),
@@ -158,8 +164,22 @@ public class BookingCarService {
 
     private String requirePrincipalId(User principal) {
         if (principal == null || principal.getId() == null || principal.getId().isBlank()) {
-            throw new RuntimeException("ChÆ°a Ä‘Äƒng nháº­p");
+            throw new AccessDeniedException("Chưa đăng nhập");
         }
         return principal.getId();
+    }
+
+    private void requireCancellationPermission(User canceller, User requester) {
+        if (canceller.getRole() != RoleEnum.ADMIN && !canceller.getId().equals(requester.getId())) {
+            throw new AccessDeniedException("Bạn không có quyền hủy booking này");
+        }
+    }
+
+    private String normalizeCancellationReason(String reason) {
+        return reason == null || reason.isBlank() ? null : reason.trim();
+    }
+
+    private String buildCancellationMessage(String message, String reason) {
+        return reason == null ? message : message + " Lý do: " + reason;
     }
 }

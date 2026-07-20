@@ -4,6 +4,7 @@ import { Button } from '../components/ui/Button';
 import { Building2, Car, Clock } from 'lucide-react';
 import { bookingApi } from '../api/bookingApi';
 import { formatViDateTime } from '../utils/dateTime';
+import AdminApprovalHistory from '../components/admin/AdminApprovalHistory';
 
 function buildCarPurpose(booking) {
   if (booking.title) return booking.title;
@@ -15,6 +16,7 @@ export default function AdminApprovals() {
   const navigate = useNavigate();
   const [pendingRequests, setPendingRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('PENDING');
 
   useEffect(() => {
     const fetchPending = async () => {
@@ -68,6 +70,18 @@ export default function AdminApprovals() {
         <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Duyệt yêu cầu</h1>
         <p className="text-gray-500 mt-1">Quản lý và xét duyệt các yêu cầu sử dụng tài nguyên đang chờ xử lý.</p>
       </div>
+
+      <div className="mb-5 flex w-fit rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+        <button type="button" onClick={() => setActiveTab('PENDING')} className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'PENDING' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+          Chờ xử lý{!loading ? ` (${pendingRequests.length})` : ''}
+        </button>
+        <button type="button" onClick={() => setActiveTab('HISTORY')} className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'HISTORY' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+          Lịch sử xử lý
+        </button>
+      </div>
+
+      {activeTab === 'PENDING' ? (
+        <>
 
       <div className="hidden md:block bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
@@ -210,6 +224,11 @@ export default function AdminApprovals() {
           </div>
         )}
       </div>
+
+        </>
+      ) : (
+        <AdminApprovalHistory />
+      )}
 
     </div>
   );

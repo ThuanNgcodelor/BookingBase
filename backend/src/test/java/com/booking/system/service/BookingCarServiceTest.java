@@ -1,10 +1,12 @@
 package com.booking.system.service;
 
 import com.booking.system.dto.BookingCarRequest;
+import com.booking.system.dto.CancelRequest;
 import com.booking.system.entity.BookingCar;
 import com.booking.system.entity.User;
 import com.booking.system.entity.Vehicle;
 import com.booking.system.enums.RoleEnum;
+import com.booking.system.enums.BookingStatus;
 import com.booking.system.repository.BookingCarRepository;
 import com.booking.system.repository.UserRepository;
 import com.booking.system.repository.VehicleRepository;
@@ -22,6 +24,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class BookingCarServiceTest {
@@ -69,6 +72,30 @@ class BookingCarServiceTest {
         BookingCar saved = bookingCarService.createBooking(request, requester);
 
         assertThat(saved.getRequester().getId()).isEqualTo(requester.getId());
+    }
+
+    @Test
+    void adminCancelsApprovedCarUsingAuthenticatedPrincipal() {
+        User requester = user("user-1", "Nhân viên", RoleEnum.EMPLOYEE);
+        User admin = user("admin-1", "Admin", RoleEnum.ADMIN);
+        BookingCar booking = new BookingCar();
+        booking.setId("booking-car-1");
+        booking.setDeparture("Văn phòng");
+        booking.setDestination("Sân bay");
+        booking.setRequester(requester);
+        booking.setStatus(BookingStatus.APPROVED);
+        CancelRequest request = new CancelRequest();
+
+        when(userRepository.findById(admin.getId())).thenReturn(Optional.of(admin));
+        when(bookingCarRepository.findById(booking.getId())).thenReturn(Optional.of(booking));
+
+        bookingCarService.cancelBooking(booking.getId(), request, admin);
+
+        assertThat(booking.getStatus()).isEqualTo(BookingStatus.CANCELLED);
+        assertThat(booking.getCancelledBy()).isSameAs(admin);
+        assertThat(booking.getCancelReason()).isNull();
+        assertThat(booking.getCancelledAt()).isNotNull();
+        verify(bookingCarRepository).save(booking);
     }
 
     private User user(String id, String fullName, RoleEnum role) {
