@@ -79,7 +79,10 @@ export default function Register() {
         ) : step === 'verify' ? (
           <form onSubmit={verifyOtp} className="space-y-4">
             <div className="p-3 rounded-md bg-blue-50 text-blue-700 text-sm border border-blue-100">
-              OTP đã được gửi tới <strong>{form.email}</strong>
+              <p>OTP đã được gửi tới <strong>{form.email}</strong></p>
+              <p className="mt-1 text-xs text-blue-600">
+                Nếu chưa thấy email, vui lòng kiểm tra thư mục Spam hoặc Thư rác.
+              </p>
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">Họ và tên</label>
